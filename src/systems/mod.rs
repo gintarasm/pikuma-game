@@ -8,7 +8,7 @@ impl SystemAction for MovementSystem {
             let transform = world.get_component::<TransformComponent>(entity).unwrap();
             let rigid_body = world.get_component::<RigidBodyComponent>(entity).unwrap();
 
-            transform.position += rigid_body.velocity
+            // transform.position += rigid_body.velocity
         });
     }
 

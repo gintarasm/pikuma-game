@@ -1,10 +1,13 @@
 use crate::logger::Logger;
 use std::{
-    any::{type_name, TypeId},
+    any::{type_name, Any, TypeId},
     collections::{HashMap, HashSet},
 };
 
-use super::comp_pool::{CompPool, GenericCompPool};
+use super::{
+    comp_pool::{CompPool, GenericCompPool},
+    resources::Resources,
+};
 use super::{Component, Entity, System, SystemAction};
 
 pub struct World {
@@ -12,6 +15,7 @@ pub struct World {
     component_pools: HashMap<TypeId, Box<dyn GenericCompPool>>,
     entity_component_signatures: Vec<HashSet<TypeId>>,
     systems: HashMap<TypeId, System>,
+    resources: Resources,
 
     entities_to_add: HashSet<Entity>,
     entities_to_remove: HashSet<Entity>,
@@ -25,6 +29,7 @@ impl World {
             component_pools: HashMap::new(),
             entity_component_signatures: Vec::new(),
             systems: HashMap::new(),
+            resources: Resources::new(),
             entities_to_add: HashSet::new(),
             entities_to_remove: HashSet::new(),
             logger: Logger::new(),
@@ -105,6 +110,26 @@ impl World {
         self.systems.get_mut(&system_id).unwrap()
     }
 
+    pub fn add_resource<T: Any>(&mut self, resource: T) {
+        self.resources.add(resource);
+        self.logger
+            .info(&format!("Add resource {}", type_name::<T>(),));
+    }
+
+    pub fn get_resource<T: Any>(&self) -> Option<&T> {
+        self.resources.get_ref()
+    }
+
+    pub fn get_resource_mut<T: Any>(&mut self) -> Option<&mut T> {
+        self.resources.get_ref_mut()
+    }
+
+    pub fn delete_resource<T: Any>(&mut self) {
+        self.resources.delete::<T>();
+        self.logger
+            .info(&format!("Deleting resource {}", type_name::<T>()));
+    }
+
     pub fn add_component<T: Component + 'static>(&mut self, entity: &Entity, component: T) {
         let comp_id = TypeId::of::<T>();
 
@@ -146,7 +171,11 @@ impl World {
             .unwrap()
             .remove(&comp_id);
 
-        self.logger.info(&format!("Removing component {} from Entity Id = {}", type_name::<T>(), entity.0));
+        self.logger.info(&format!(
+            "Removing component {} from Entity Id = {}",
+            type_name::<T>(),
+            entity.0
+        ));
     }
 
     pub fn has_component<T: Component + 'static>(&self, entity: &Entity) -> bool {

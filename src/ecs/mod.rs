@@ -5,11 +5,13 @@ use std::{
 
 use self::world::World;
 
+mod tests;
 pub mod comp_pool;
 pub mod world;
+pub mod resources;
 
 #[derive(Debug, PartialEq, PartialOrd, Clone, Copy, Eq, Hash)]
-pub struct Entity(usize);
+pub struct Entity(pub usize);
 pub struct SystemBuilder {
     name: String,
     action: Box<dyn SystemAction>,
@@ -17,7 +19,7 @@ pub struct SystemBuilder {
 }
 
 impl SystemBuilder {
-    pub fn new<T: SystemAction>(name: &str, action: T) -> Self {
+    pub fn new<T: SystemAction + 'static>(name: &str, action: T) -> Self {
         Self {
             name: name.to_owned(),
             action: Box::new(action),
