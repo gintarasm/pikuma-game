@@ -10,6 +10,8 @@ fn create_entity() {
 
 #[cfg(test)]
 mod resources {
+    use ecs_macro::Component;
+
     use crate::ecs::world::World;
 
     #[test]
@@ -43,6 +45,40 @@ mod resources {
 
         assert!(resource.is_none());   
     }
+
+    #[test]
+    fn query_for_entities() {        
+        let mut world = World::new();
+
+        let entity = world.create_entity();
+        world.add_component(&entity, Location(1, 1));
+        world.add_component(&entity, Size(10));
+
+        let entity2 = world.create_entity();
+        world.add_component(&entity2, Location(11, 11));
+
+        let entity3 = world.create_entity();
+        world.add_component(&entity3, Size(99));
+
+
+        let query = world.query()
+            .with_component::<Location>()
+            .with_component::<Size>()
+            .run();
+
+        let locations = query[0];
+        let sizes = query[1];
+
+        assert_eq!(locations.len(), sizes.len());
+        assert_eq!(locations.len(), 2);
+    }
+
+
+    
+    #[derive(Component)]
+    struct Location(pub i32, pub i32);
+    #[derive(Component)]
+    struct Size(pub i32);
 
     struct Fps(pub u32);
 }

@@ -10,7 +10,7 @@ pub fn component_derive(input: TokenStream) -> TokenStream {
     let name = &input.ident;
 
     let expanded = quote! {
-      impl crate::ecs::Component for #name {
+      impl crate::ecs::components::Component for #name {
 
       }
     };

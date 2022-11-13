@@ -7,6 +7,7 @@ use crate::components::{RigidBodyComponent, TransformComponent};
 use crate::ecs::world::World;
 use crate::logger::Logger;
 use crate::sdl::{Context, MILLIS_PER_FRAME};
+use crate::systems::MovementSystem;
 
 pub struct Game {
     is_running: bool,
@@ -56,7 +57,10 @@ impl Game {
             RigidBodyComponent {
                 velocity: Vec2::ZERO,
             },
-        )
+        );
+
+        self.world.add_system(MovementSystem {});
+
     }
 
     fn process_input(&mut self, event_pump: &mut EventPump) {
