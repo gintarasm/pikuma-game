@@ -25,7 +25,7 @@ impl Context {
             .window(name, height, width)
             .position_centered()
             // .fullscreen()
-            .borderless()
+            // .borderless()
             .build()
             .unwrap();
 
