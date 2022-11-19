@@ -60,14 +60,22 @@ mod resources {
         let entity3 = world.create_entity();
         world.add_component(&entity3, Size(99));
 
+    }
 
-        let result = world.query()
-            .with_component::<Location>()
-            .with_component::<Size>()
-            .run();
+    #[test]
+    fn reuse_deleted_entity_ids() {
+        let mut world = World::new();
 
-        let locations = result.get::<Location>();
-        let sizes = result.get::<Size>();
+        let entity = world.create_entity();
+        world.update();
+        
+        world.remove_entity(&entity);
+        world.update();
+
+        let new_entity = world.create_entity();
+        world.update();
+
+        assert_eq!(entity.0, new_entity.0);
     }
 
 

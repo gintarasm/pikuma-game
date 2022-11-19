@@ -7,8 +7,8 @@ pub struct MovementSystem {}
 
 impl SystemAction for MovementSystem {
     fn action(&self, world: &World, entities: &Vec<Entity>) {
-        let mut transforms= world.query().get_mut::<TransformComponent>();
-        let rigid_bodies = world.query().get::<RigidBodyComponent>();
+        let mut transforms= world.query().components().get_mut::<TransformComponent>();
+        let rigid_bodies = world.query().components().get::<RigidBodyComponent>();
 
         for ent in entities {
             let transform = transforms.get_mut(ent.0).unwrap();

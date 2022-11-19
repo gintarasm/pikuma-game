@@ -1,15 +1,14 @@
 use crate::logger::Logger;
 use std::{
     any::{type_name, Any, TypeId},
-    collections::{HashMap, HashSet}, rc::Rc, cell::RefCell,
+    collections::{HashMap, HashSet},
 };
 
 use super::{
-    components::{
-        Component,
-    },
+    components::Component,
     entities::{entity_manager::EntityManager, Entity},
-    resources::Resources, SystemBuilder, query::Query,
+    query::Query,
+    resources::Resources,
 };
 use super::{System, SystemAction};
 
@@ -41,36 +40,63 @@ impl<'a> World<'a> {
             self.add_entity_to_systems(*entity);
         });
         self.entities_to_add.clear();
+
+        let entities_to_remove = std::mem::take(&mut self.entities_to_remove);
+        entities_to_remove
+            .iter()
+            .for_each(|entity| self.kill_entity(entity));
+        self.entities_to_remove.clear();
     }
 
     pub fn create_entity(&mut self) -> Entity {
         let entity = self.entity_manager.create_entity();
-        self.entities_to_add.insert(entity);
 
-        self.logger
-            .info(&format!("Entity created with id = {}", entity.0));
+        self.entities_to_add.insert(entity);
 
         entity
     }
 
     fn add_entity_to_systems(&mut self, entity: Entity) {
+        self.logger
+            .info(&format!("Adding entity id = {} to systems", entity.0));
+
         let key = self.entity_manager.get_signature(&entity).unwrap();
 
-        self.systems.values_mut().for_each(|system| {
-            if system.signature == key {
+        self.systems
+            .values_mut()
+            .filter(|s| s.signature == key)
+            .for_each(|system| {
                 self.logger.info(&format!(
                     "Adding entity id = {} to system {}",
                     entity.0, system.name
                 ));
                 system.add_entity(entity.clone());
-            }
-        });
+            });
     }
 
-    pub fn kill_entity(&mut self, entity: &Entity) {
+    pub fn remove_entity(&mut self, entity: &Entity) {
+        self.logger
+            .info(&format!("Removing entity id = {}", entity.0));
+
+        self.entities_to_remove.insert(*entity);
+    }
+
+    fn kill_entity(&mut self, entity: &Entity) {
         self.logger
             .info(&format!("Killing entity id = {}", entity.0));
-        self.entities_to_remove.insert(*entity);
+
+        let key = self.entity_manager.get_signature(&entity).unwrap();
+        self.entity_manager.remove_entity(entity);
+        self.systems
+            .values_mut()
+            .filter(|s| s.signature == key)
+            .for_each(|system| {
+                self.logger.info(&format!(
+                    "Removing id = {} from system {}",
+                    entity.0, system.name
+                ));
+                system.remove_entity(entity.clone());
+            });
     }
 
     pub fn add_system<T: SystemAction + 'static>(&mut self, system_action: T) {
@@ -147,11 +173,11 @@ impl<'a> World<'a> {
         self.entity_manager.has_component::<T>(entity)
     }
 
-    pub fn get_component_signatures(&self) -> HashMap<TypeId, u32> { 
+    pub fn get_component_signatures(&self) -> HashMap<TypeId, u32> {
         self.entity_manager.get_component_signatures()
     }
 
     pub fn query(&self) -> Query {
-        Query::new(&self.entity_manager.component_manager)
+        Query::new(&self.entity_manager, &self.entity_manager.component_manager)
     }
 }
