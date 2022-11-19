@@ -61,16 +61,13 @@ mod resources {
         world.add_component(&entity3, Size(99));
 
 
-        let query = world.query()
+        let result = world.query()
             .with_component::<Location>()
             .with_component::<Size>()
             .run();
 
-        let locations = query[0];
-        let sizes = query[1];
-
-        assert_eq!(locations.len(), sizes.len());
-        assert_eq!(locations.len(), 2);
+        let locations = result.get::<Location>();
+        let sizes = result.get::<Size>();
     }
 
 

@@ -1,16 +1,21 @@
-use crate::{ecs::{SystemAction, world::World, SystemBuilder, entities::Entity, System}, components::{TransformComponent, RigidBodyComponent}};
-
+use crate::{
+    components::{RigidBodyComponent, TransformComponent},
+    ecs::{entities::Entity, world::World, System, SystemAction, SystemBuilder},
+};
 
 pub struct MovementSystem {}
 
 impl SystemAction for MovementSystem {
-    fn action(&self, world: &mut World, entities: &Vec<Entity>) {
-        entities.iter().for_each(|entity| {
-            let transform = world.get_component::<TransformComponent>(entity).unwrap();
-            let rigid_body = world.get_component::<RigidBodyComponent>(entity).unwrap();
+    fn action(&self, world: &World, entities: &Vec<Entity>) {
+        let mut transforms= world.query().get_mut::<TransformComponent>();
+        let rigid_bodies = world.query().get::<RigidBodyComponent>();
 
-            // transform.position += rigid_body.velocity
-        });
+        for ent in entities {
+            let transform = transforms.get_mut(ent.0).unwrap();
+            let rigid_body = rigid_bodies.get(ent.0).unwrap();
+
+            transform.position += rigid_body.velocity;
+        }
     }
 
     fn to_system(self, world: &World) -> System {

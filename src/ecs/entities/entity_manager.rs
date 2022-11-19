@@ -6,14 +6,14 @@ use crate::{ecs::components::Component, logger::Logger};
 
 use super::Entity;
 
-pub struct EntityManager {
+pub struct EntityManager<'a> {
     num_of_entities: usize,
-    entity_component_signatures: Vec<u32>,
-    component_manager: ComponentManager,
+    pub entity_component_signatures: Vec<u32>,
+    pub component_manager: ComponentManager<'a>,
     logger: Logger,
 }
 
-impl EntityManager {
+impl<'a> EntityManager<'a> {
     pub fn new() -> Self {
         Self {
             num_of_entities: 0,
@@ -40,6 +40,9 @@ impl EntityManager {
     pub fn remove_entity(&mut self, entity: &Entity) {
         self.logger
             .info(&format!("Removing entity id = {}", entity.0));
+
+        self.entity_component_signatures[entity.0] = 0;
+        self.component_manager.remove_all(entity);
     }
 
     pub fn add_component<T: Component + 'static>(&mut self, entity: &Entity, component: T) {
@@ -61,6 +64,7 @@ impl EntityManager {
     pub fn remove_component<T: Component + 'static>(&mut self, entity: &Entity) {
         let comp_mask = self.component_manager.get_mask::<T>().unwrap();
         self.entity_component_signatures[entity.0] &= !comp_mask;
+        self.component_manager.remove::<T>(entity);
 
         self.logger.info(&format!(
             "Removing component {} from Entity Id = {}",
@@ -75,14 +79,6 @@ impl EntityManager {
         let signature = self.entity_component_signatures.get(entity.0).unwrap();
 
         (signature & comp_mask) == comp_mask
-    }
-
-    pub fn get_component<T: Component + 'static>(&self, entity: &Entity) -> Option<&T> {
-        self.component_manager.get_component(entity)
-    }
-
-    pub fn get_component_mut<T: Component + 'static>(&mut self, entity: &Entity) -> Option<&mut T> {
-        self.component_manager.get_component_mut(entity)
     }
 
     pub fn get_signature(&self, entity: &Entity) -> Option<u32> {

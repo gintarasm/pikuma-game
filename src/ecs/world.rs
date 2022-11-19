@@ -9,12 +9,12 @@ use super::{
         Component,
     },
     entities::{entity_manager::EntityManager, Entity},
-    resources::Resources, SystemBuilder,
+    resources::Resources, SystemBuilder, query::Query,
 };
 use super::{System, SystemAction};
 
-pub struct World {
-    entity_manager: EntityManager,
+pub struct World<'a> {
+    entity_manager: EntityManager<'a>,
     systems: HashMap<TypeId, System>,
     resources: Resources,
 
@@ -23,7 +23,7 @@ pub struct World {
     logger: Logger,
 }
 
-impl<'a> World {
+impl<'a> World<'a> {
     pub fn new() -> Self {
         Self {
             entity_manager: EntityManager::new(),
@@ -147,17 +147,11 @@ impl<'a> World {
         self.entity_manager.has_component::<T>(entity)
     }
 
-    pub fn get_component<T: Component + 'static>(&self, entity: &Entity) -> Option<&T> {
-        self.entity_manager.get_component(entity)
-    }
-
-    pub fn get_component_mut<T: Component + 'static>(&mut self, entity: &Entity) -> Option<&mut T> {
-        self.entity_manager.get_component_mut::<T>(entity)
-    }
-
     pub fn get_component_signatures(&self) -> HashMap<TypeId, u32> { 
         self.entity_manager.get_component_signatures()
     }
 
-    pub fn query(&self) {}
+    pub fn query(&self) -> Query {
+        Query::new(&self.entity_manager.component_manager)
+    }
 }

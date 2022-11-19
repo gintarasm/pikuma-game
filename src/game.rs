@@ -9,15 +9,15 @@ use crate::logger::Logger;
 use crate::sdl::{Context, MILLIS_PER_FRAME};
 use crate::systems::MovementSystem;
 
-pub struct Game {
+pub struct Game<'a> {
     is_running: bool,
     context: Context,
     logger: Logger,
     player: Vec2,
-    world: World,
+    world: World<'a>,
 }
 
-impl Game {
+impl Game<'static> {
     pub fn new() -> Self {
         Self {
             context: Context::new("My game", 800, 600),

@@ -70,6 +70,6 @@ impl System {
 }
 
 pub trait SystemAction {
-    fn action(&self, world: &mut World, entities: &Vec<Entity>);
+    fn action(&self, world: &World, entities: &Vec<Entity>);
     fn to_system(self, world: &World) -> System;
 }
