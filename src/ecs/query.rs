@@ -1,11 +1,7 @@
-use std::{
-    any::TypeId,
-    cell::{Ref, RefCell, RefMut},
-    collections::HashMap,
-};
+use std::cell::{Ref, RefMut};
 
 use super::{
-    components::{self, comp_pool::CompPool, component_manager::ComponentManager},
+    components::{comp_pool::CompPool, component_manager::ComponentManager},
     entities::{Entity, entity_manager::EntityManager},
     Component,
 };

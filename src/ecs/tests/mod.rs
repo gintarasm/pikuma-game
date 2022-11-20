@@ -51,13 +51,16 @@ mod resources {
         let mut world = World::new();
 
         let entity = world.create_entity();
+        world.update();
         world.add_component(&entity, Location(1, 1));
         world.add_component(&entity, Size(10));
 
         let entity2 = world.create_entity();
+        world.update();
         world.add_component(&entity2, Location(11, 11));
 
         let entity3 = world.create_entity();
+        world.update();
         world.add_component(&entity3, Size(99));
 
     }

@@ -1,6 +1,6 @@
 use std::{any::Any, cell::RefCell};
 
-use crate::ecs::entities::Entity;
+use crate::ecs::{entities::Entity, errors::EcsErrors};
 
 use super::Component;
 
@@ -60,28 +60,44 @@ impl<T: Component + 'static> CompPool<T> {
         self.data.push(Some(comp));
     }
 
-    pub fn remove(&mut self, index: usize) {
+    pub fn remove(&mut self, index: usize) -> Result<(), EcsErrors> {
+        if self.data.get(index).is_none() {
+            return Err(EcsErrors::EntityDoesNotExist(index));
+        }
         self.data[index] = None;
+        Ok(())
     }
 
-    pub fn set(&mut self, index: usize, comp: T) {
+    pub fn set(&mut self, index: usize, comp: T) -> Result<(), EcsErrors> {
+        if self.data.get(index).is_none() {
+            return Err(EcsErrors::EntityDoesNotExist(index));
+        }
         self.data[index] = Some(comp);
+
+        Ok(())
     }
 
-    pub fn get(&self, index: usize) -> Option<&T> {
-        self.data.get(index)?.as_ref()
+    pub fn get(&self, index: usize) -> Result<&T, EcsErrors> {
+        if let Some(comp) = self.data.get(index) {
+            Ok(comp.as_ref().unwrap())
+        } else {
+            Err(EcsErrors::EntityDoesNotExist(index))
+        }
     }
 
-    pub fn get_mut(&mut self, index: usize) -> Option<&mut T> {
-        self.data.get_mut(index)?.as_mut()
+    pub fn get_mut(&mut self, index: usize) -> Result<&mut T, EcsErrors> {
+        if let Some(comp) = self.data.get_mut(index) {
+            Ok(comp.as_mut().unwrap())
+        } else {
+            Err(EcsErrors::EntityDoesNotExist(index))
+        }
     }
 
-    pub fn iter(&self) -> impl Iterator<Item=&Option<T>> {
+    pub fn iter(&self) -> impl Iterator<Item = &Option<T>> {
         self.data.iter()
     }
-    
+
     pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Option<T>> {
         self.data.iter_mut()
     }
-
 }

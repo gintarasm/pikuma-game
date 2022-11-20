@@ -1,6 +1,6 @@
 use std::{
-    any::{Any, TypeId},
-    collections::{HashSet, HashMap}, marker::PhantomData
+    any::TypeId,
+    collections::HashMap, marker::PhantomData
 };
 
 use self::{world::World, components::Component, entities::Entity};
@@ -11,6 +11,7 @@ pub mod world;
 pub mod resources;
 pub mod query;
 pub mod components;
+pub mod errors;
 
 pub struct SystemBuilder<T: SystemAction + 'static> {
     comp_signatures: HashMap<TypeId, u32>,
@@ -60,7 +61,7 @@ impl System {
         self.entities.push(entity);
     }
 
-    pub fn remove_entity(&mut self, entity: Entity) {
+    pub fn remove_entity(&mut self, entity: &Entity) {
         self.entities.retain(|e| e.0 != entity.0);
     }
 

@@ -64,13 +64,13 @@ impl<'a> World<'a> {
 
         self.systems
             .values_mut()
-            .filter(|s| s.signature == key)
+            .filter(|s| s.signature == *key)
             .for_each(|system| {
                 self.logger.info(&format!(
                     "Adding entity id = {} to system {}",
                     entity.0, system.name
                 ));
-                system.add_entity(entity.clone());
+                system.add_entity(entity);
             });
     }
 
@@ -85,7 +85,7 @@ impl<'a> World<'a> {
         self.logger
             .info(&format!("Killing entity id = {}", entity.0));
 
-        let key = self.entity_manager.get_signature(&entity).unwrap();
+        let key = self.entity_manager.get_signature(&entity).unwrap().clone();
         self.entity_manager.remove_entity(entity);
         self.systems
             .values_mut()
@@ -95,13 +95,13 @@ impl<'a> World<'a> {
                     "Removing id = {} from system {}",
                     entity.0, system.name
                 ));
-                system.remove_entity(entity.clone());
+                system.remove_entity(entity);
             });
     }
 
     pub fn add_system<T: SystemAction + 'static>(&mut self, system_action: T) {
         let system_id = TypeId::of::<T>();
-        let system = system_action.to_system(&self);
+        let system = system_action.to_system(self);
         if let Some(system) = self.systems.insert(system_id, system) {
             self.logger.info(&format!("Adding systems {}", system.name));
         }
@@ -151,7 +151,7 @@ impl<'a> World<'a> {
     }
 
     pub fn add_component<T: Component + 'static>(&mut self, entity: &Entity, component: T) {
-        self.entity_manager.add_component(entity, component);
+        self.entity_manager.add_component(entity, component).unwrap();
 
         self.logger.info(&format!(
             "Add component {} to Entity Id = {}",
@@ -161,7 +161,7 @@ impl<'a> World<'a> {
     }
 
     pub fn remove_component<T: Component + 'static>(&mut self, entity: &Entity) {
-        self.entity_manager.remove_component::<T>(entity);
+        self.entity_manager.remove_component::<T>(entity).unwrap();
         self.logger.info(&format!(
             "Removing component {} from Entity Id = {}",
             type_name::<T>(),
@@ -170,7 +170,7 @@ impl<'a> World<'a> {
     }
 
     pub fn has_component<T: Component + 'static>(&self, entity: &Entity) -> bool {
-        self.entity_manager.has_component::<T>(entity)
+        self.entity_manager.has_component::<T>(entity).unwrap()
     }
 
     pub fn get_component_signatures(&self) -> HashMap<TypeId, u32> {

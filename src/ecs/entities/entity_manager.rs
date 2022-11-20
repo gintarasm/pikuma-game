@@ -2,27 +2,28 @@ use std::any::{type_name, TypeId};
 use std::collections::HashMap;
 
 use crate::ecs::components::component_manager::ComponentManager;
+use crate::ecs::errors::EcsErrors;
 use crate::{ecs::components::Component, logger::Logger};
 
 use super::Entity;
 
 struct EntityIdGenerator {
-    num_of_entities: usize,
+    current_free_id: usize,
     freed_entities: Vec<usize>,
 }
 
 impl EntityIdGenerator {
     pub fn new() -> Self {
         Self {
-            num_of_entities: 0,
+            current_free_id: 0,
             freed_entities: vec![],
         }
     }
 
     pub fn get_id(&mut self) -> usize {
         if self.freed_entities.is_empty() {
-            let id = self.num_of_entities;
-            self.num_of_entities += 1;
+            let id = self.current_free_id;
+            self.current_free_id += 1;
             id
         } else {
             self.freed_entities.pop().unwrap()
@@ -31,6 +32,10 @@ impl EntityIdGenerator {
 
     pub fn free_id(&mut self, id: usize) {
         self.freed_entities.push(id)
+    }
+
+    pub fn is_id_used(&self, id: usize) -> bool {
+        self.current_free_id >= id && !self.freed_entities.contains(&id)
     }
 }
 
@@ -75,11 +80,15 @@ impl<'a> EntityManager<'a> {
         self.id_generator.free_id(entity.0);
     }
 
-    pub fn add_component<T: Component + 'static>(&mut self, entity: &Entity, component: T) {
+    pub fn add_component<T: Component + 'static>(
+        &mut self,
+        entity: &Entity,
+        component: T,
+    ) -> Result<(), EcsErrors> {
         let comp_mask = self.component_manager.add_component(entity, component);
 
-        if let None = self.entity_component_signatures.get(entity.0) {
-            self.entity_component_signatures.resize(entity.0 + 1, 0);
+        if !self.id_generator.is_id_used(entity.0) {
+            return Err(EcsErrors::EntityDoesNotExist(entity.0));
         }
 
         self.entity_component_signatures[entity.0] |= comp_mask;
@@ -89,9 +98,18 @@ impl<'a> EntityManager<'a> {
             type_name::<T>(),
             entity.0
         ));
+
+        Ok(())
     }
 
-    pub fn remove_component<T: Component + 'static>(&mut self, entity: &Entity) {
+    pub fn remove_component<T: Component + 'static>(
+        &mut self,
+        entity: &Entity,
+    ) -> Result<(), EcsErrors> {
+        if !self.id_generator.is_id_used(entity.0) {
+            return Err(EcsErrors::EntityDoesNotExist(entity.0));
+        }
+
         let comp_mask = self.component_manager.get_mask::<T>().unwrap();
         self.entity_component_signatures[entity.0] &= !comp_mask;
         self.component_manager.remove::<T>(entity);
@@ -101,20 +119,34 @@ impl<'a> EntityManager<'a> {
             type_name::<T>(),
             entity.0
         ));
+
+        Ok(())
     }
 
-    pub fn has_component<T: Component + 'static>(&self, entity: &Entity) -> bool {
+    pub fn has_component<T: Component + 'static>(
+        &self,
+        entity: &Entity,
+    ) -> Result<bool, EcsErrors> {
+        if !self.id_generator.is_id_used(entity.0) {
+            return Err(EcsErrors::EntityDoesNotExist(entity.0));
+        }
+
         let comp_mask = self.component_manager.get_mask::<T>().unwrap();
 
         let signature = self.entity_component_signatures.get(entity.0).unwrap();
 
-        (signature & comp_mask) == comp_mask
+        Ok((*signature &comp_mask) == *comp_mask)
     }
 
-    pub fn get_signature(&self, entity: &Entity) -> Option<u32> {
-        self.entity_component_signatures
+    pub fn get_signature(&self, entity: &Entity) -> Result<&u32, EcsErrors> {
+        if !self.id_generator.is_id_used(entity.0) {
+            return Err(EcsErrors::EntityDoesNotExist(entity.0));
+        }
+
+        Ok(self
+            .entity_component_signatures
             .get(entity.0)
-            .map(|i| i.clone())
+            .unwrap())
     }
 
     pub fn get_component_signatures(&self) -> HashMap<TypeId, u32> {
