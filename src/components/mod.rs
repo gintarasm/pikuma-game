@@ -13,3 +13,6 @@ pub struct TransformComponent {
 pub struct RigidBodyComponent {
     pub velocity: Vec2
 }
+
+#[derive(Debug, Clone, Copy, Component)]
+pub struct SpriteComponent {}

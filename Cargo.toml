@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 sdl2 = {version = "0.35.2", features = ["image"]}
-time = {version = "0.3.14"}
+time = {version = "0.3.14", features = ["formatting"]}
 ecs_macro = { path = "ecs_macro" }
 imgui = "0.8.2"
 glam = "0.22.0"

@@ -3,6 +3,8 @@ use std::{
     collections::HashMap, marker::PhantomData
 };
 
+use time::Duration;
+
 use self::{world::World, components::Component, entities::Entity};
 
 mod tests;
@@ -65,12 +67,12 @@ impl System {
         self.entities.retain(|e| e.0 != entity.0);
     }
 
-    pub fn active(&self, world: &mut World) {
-        self.action.action(world, &self.entities);
+    pub fn active(&mut self, world: &World, delta_time: &Duration) {
+        self.action.action(world, &self.entities, delta_time);
     }
 }
 
 pub trait SystemAction {
-    fn action(&self, world: &World, entities: &Vec<Entity>);
+    fn action(&mut self, world: &World, entities: &Vec<Entity>, delta_time: &Duration);
     fn to_system(self, world: &World) -> System;
 }

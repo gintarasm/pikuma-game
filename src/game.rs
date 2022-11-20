@@ -55,11 +55,11 @@ impl Game<'static> {
         self.world.add_component(
             &tank,
             RigidBodyComponent {
-                velocity: Vec2::ZERO,
+                velocity: Vec2::new(10.0, 50.0),
             },
         );
 
-        self.world.add_system(MovementSystem {});
+        self.world.add_system(MovementSystem::new());
 
     }
 
@@ -118,7 +118,11 @@ impl Game<'static> {
 
         let speed = Vec2::new(30.0, 0.0) * delta_time.as_seconds_f32();
         self.player += speed;
+
+        self.world.update();
+        self.world.update_system::<MovementSystem>(delta_time);
     }
+
     pub fn render(&mut self) {
         self.context.canvas.set_draw_color(Color::RGB(21, 21, 21));
         self.context.canvas.clear();

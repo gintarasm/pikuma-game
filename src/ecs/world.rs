@@ -1,7 +1,9 @@
+use time::Duration;
+
 use crate::logger::Logger;
 use std::{
     any::{type_name, Any, TypeId},
-    collections::{HashMap, HashSet},
+    collections::{HashMap, HashSet}
 };
 
 use super::{
@@ -39,13 +41,11 @@ impl<'a> World<'a> {
         entities_to_add.iter().for_each(|entity| {
             self.add_entity_to_systems(*entity);
         });
-        self.entities_to_add.clear();
 
         let entities_to_remove = std::mem::take(&mut self.entities_to_remove);
         entities_to_remove
             .iter()
             .for_each(|entity| self.kill_entity(entity));
-        self.entities_to_remove.clear();
     }
 
     pub fn create_entity(&mut self) -> Entity {
@@ -66,11 +66,11 @@ impl<'a> World<'a> {
             .values_mut()
             .filter(|s| s.signature == *key)
             .for_each(|system| {
+                system.add_entity(entity);
                 self.logger.info(&format!(
                     "Adding entity id = {} to system {}",
                     entity.0, system.name
                 ));
-                system.add_entity(entity);
             });
     }
 
@@ -102,9 +102,9 @@ impl<'a> World<'a> {
     pub fn add_system<T: SystemAction + 'static>(&mut self, system_action: T) {
         let system_id = TypeId::of::<T>();
         let system = system_action.to_system(self);
-        if let Some(system) = self.systems.insert(system_id, system) {
-            self.logger.info(&format!("Adding systems {}", system.name));
-        }
+        self.logger.info(&format!("Adding systems {}", system.name));
+        self.systems.insert(system_id, system);
+        println!("systems add {:?}", self.systems.len());
     }
 
     pub fn remove_system<T: SystemAction + 'static>(&mut self) {
@@ -113,6 +113,15 @@ impl<'a> World<'a> {
             self.logger
                 .info(&format!("Removing system {}", system.name));
         }
+    }
+
+    pub fn update_system<T: SystemAction + 'static>(&mut self, delta_time: &Duration) {
+        let system_id = TypeId::of::<T>();
+        let mut systems = std::mem::take(&mut self.systems);
+        let system = systems.get_mut(&system_id).unwrap();
+        self.logger.info(&format!("Updating system {}", system.name));
+        system.active(self, delta_time);
+        self.systems = std::mem::take(&mut systems);
     }
 
     pub fn has_system<T: SystemAction + 'static>(&self) -> bool {
@@ -151,7 +160,9 @@ impl<'a> World<'a> {
     }
 
     pub fn add_component<T: Component + 'static>(&mut self, entity: &Entity, component: T) {
-        self.entity_manager.add_component(entity, component).unwrap();
+        self.entity_manager
+            .add_component(entity, component)
+            .unwrap();
 
         self.logger.info(&format!(
             "Add component {} to Entity Id = {}",

@@ -1,6 +1,5 @@
-use std::fmt::Debug;
-
 use time::{OffsetDateTime, PrimitiveDateTime};
+use time::format_description::well_known::Rfc3339;
 
 pub struct Logger {
     message: Vec<LogEntry>
@@ -42,8 +41,8 @@ impl Logger {
         format!("{prefix} | {time} - {message}")
     }
 
-    fn time() -> PrimitiveDateTime {
-        let time = OffsetDateTime::now_utc();
-        PrimitiveDateTime::new(time.date(), time.time())
+    fn time() -> String {
+        let format: String = OffsetDateTime::now_utc().format(&Rfc3339).unwrap();
+        format
     }
 }

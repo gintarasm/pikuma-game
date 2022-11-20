@@ -93,12 +93,6 @@ impl<'a> EntityManager<'a> {
 
         self.entity_component_signatures[entity.0] |= comp_mask;
 
-        self.logger.info(&format!(
-            "Add component {} to Entity Id = {}",
-            type_name::<T>(),
-            entity.0
-        ));
-
         Ok(())
     }
 
