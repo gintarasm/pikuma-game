@@ -4,6 +4,7 @@ mod logger;
 mod ecs;
 mod components;
 mod systems;
+mod asset_store;
 
 use game::Game;
 
