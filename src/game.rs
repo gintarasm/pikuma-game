@@ -1,13 +1,15 @@
+use std::cell::RefCell;
+use std::rc::Rc;
+
 use glam::Vec2;
-use sdl2::image::LoadTexture;
 use sdl2::{event::Event, keyboard::Keycode, pixels::Color, rect::Rect, EventPump};
 use time::Duration;
 
-use crate::components::{RigidBodyComponent, TransformComponent};
+use crate::components::{RigidBodyComponent, SpriteComponent, TransformComponent};
 use crate::ecs::world::World;
 use crate::logger::Logger;
 use crate::sdl::{Context, MILLIS_PER_FRAME};
-use crate::systems::MovementSystem;
+use crate::systems::{MovementSystem, RenderSystem};
 
 pub struct Game<'a> {
     is_running: bool,
@@ -36,31 +38,50 @@ impl Game<'static> {
             let delta_time = self.context.get_delta_time();
             self.process_input(&mut event_pump);
             self.update(&delta_time);
-            self.render();
+            self.render(&delta_time);
         }
     }
 
     fn setup(&mut self) {
-        let tank = self.world.create_entity();
-
-        self.world.add_component(
-            &tank,
-            TransformComponent {
+        let tank = self
+            .world
+            .create_entity()
+            .with_component(TransformComponent {
                 position: Vec2::new(10.0, 30.0),
                 scale: Vec2::new(1.0, 1.0),
                 rotation: 0.0,
-            },
-        );
+            })
+            .with_component(RigidBodyComponent {
+                velocity: Vec2::new(50.0, 0.0),
+            })
+            .with_component(SpriteComponent {
+                texture: "./assets/images/tank-tiger-right.png".to_owned(),
+                height: 32,
+                width: 32,
+            })
+            .finish_entity();
 
-        self.world.add_component(
-            &tank,
-            RigidBodyComponent {
-                velocity: Vec2::new(10.0, 50.0),
-            },
-        );
+        let tank2 = self
+            .world
+            .create_entity()
+            .with_component(TransformComponent {
+                position: Vec2::new(10.0, 30.0),
+                scale: Vec2::new(1.0, 1.0),
+                rotation: 0.0,
+            })
+            .with_component(RigidBodyComponent {
+                velocity: Vec2::new(0.0, 50.0),
+            })
+            .with_component(SpriteComponent {
+                texture: "./assets/images/tank-tiger-right.png".to_owned(),
+                height: 32,
+                width: 32,
+            })
+            .finish_entity();
 
         self.world.add_system(MovementSystem::new());
-
+        self.world
+            .add_system(RenderSystem::new(self.context.canvas.clone()));
     }
 
     fn process_input(&mut self, event_pump: &mut EventPump) {
@@ -123,29 +144,15 @@ impl Game<'static> {
         self.world.update_system::<MovementSystem>(delta_time);
     }
 
-    pub fn render(&mut self) {
-        self.context.canvas.set_draw_color(Color::RGB(21, 21, 21));
-        self.context.canvas.clear();
-
-        let texture_creator = self.context.canvas.texture_creator();
-        let texture = texture_creator
-            .load_texture("./assets/images/tank-tiger-right.png")
-            .unwrap();
-
+    pub fn render(&mut self, delta_time: &Duration) {
         self.context
             .canvas
-            .copy(
-                &texture,
-                None,
-                Some(Rect::new(
-                    self.player.x as i32,
-                    self.player.y as i32,
-                    32,
-                    32,
-                )),
-            )
-            .unwrap();
+            .borrow_mut()
+            .set_draw_color(Color::RGB(21, 21, 21));
+        self.context.canvas.borrow_mut().clear();
 
-        self.context.canvas.present();
+        self.world.update_system::<RenderSystem>(delta_time);
+
+        self.context.canvas.borrow_mut().present()
     }
 }

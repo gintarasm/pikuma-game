@@ -8,7 +8,7 @@ use std::{
 
 use super::{
     components::Component,
-    entities::{entity_manager::EntityManager, Entity},
+    entities::{entity_manager::EntityManager, Entity, self},
     query::Query,
     resources::Resources,
 };
@@ -22,6 +22,8 @@ pub struct World<'a> {
     entities_to_add: HashSet<Entity>,
     entities_to_remove: HashSet<Entity>,
     logger: Logger,
+
+    current_entity: Option<Entity>
 }
 
 impl<'a> World<'a> {
@@ -33,6 +35,7 @@ impl<'a> World<'a> {
             entities_to_add: HashSet::new(),
             entities_to_remove: HashSet::new(),
             logger: Logger::new(),
+            current_entity: None
         }
     }
 
@@ -48,12 +51,24 @@ impl<'a> World<'a> {
             .for_each(|entity| self.kill_entity(entity));
     }
 
-    pub fn create_entity(&mut self) -> Entity {
+    pub fn create_entity(&mut self) -> &mut Self {
         let entity = self.entity_manager.create_entity();
 
+        self.current_entity = Some(entity);
         self.entities_to_add.insert(entity);
 
-        entity
+        self
+    }
+
+
+    pub fn with_component<T: Component + 'static>(&mut self, component: T) -> &mut Self {
+        let entity = self.current_entity.unwrap();
+        self.add_component(&entity, component);
+        self
+    }
+    
+    pub fn finish_entity(&mut self) -> Entity {
+        self.current_entity.unwrap()
     }
 
     fn add_entity_to_systems(&mut self, entity: Entity) {
@@ -64,7 +79,7 @@ impl<'a> World<'a> {
 
         self.systems
             .values_mut()
-            .filter(|s| s.signature == *key)
+            .filter(|s| (*key & s.signature) == s.signature)
             .for_each(|system| {
                 system.add_entity(entity);
                 self.logger.info(&format!(

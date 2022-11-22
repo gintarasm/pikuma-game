@@ -1,3 +1,5 @@
+use std::{cell::RefCell, rc::Rc};
+
 use sdl2::{
     render::WindowCanvas,
     Sdl, image::InitFlag,
@@ -11,7 +13,7 @@ pub const MILLIS_PER_FRAME: i32 = 1000 / FPS;
 
 pub struct Context {
     pub sdl: Sdl,
-    pub canvas: WindowCanvas,
+    pub canvas: Rc<RefCell<WindowCanvas>>,
     pub instant: Instant,
     pub ticks_last_frame: Duration,
 }
@@ -33,7 +35,7 @@ impl Context {
 
         Self {
             sdl: sdl,
-            canvas: canvas,
+            canvas: Rc::new(RefCell::new(canvas)),
             instant: Instant::now(),
             ticks_last_frame: Duration::milliseconds(0),
         }

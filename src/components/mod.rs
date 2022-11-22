@@ -9,10 +9,14 @@ pub struct TransformComponent {
 }
 
 
-#[derive(Debug, Clone, Copy, Component)]
+#[derive(Debug, Clone, Component)]
 pub struct RigidBodyComponent {
     pub velocity: Vec2
 }
 
-#[derive(Debug, Clone, Copy, Component)]
-pub struct SpriteComponent {}
+#[derive(Debug, Clone, Component)]
+pub struct SpriteComponent {
+    pub width: u32,
+    pub height: u32,
+    pub texture: String
+}
