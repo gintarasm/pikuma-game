@@ -1,8 +1,8 @@
 use std::{cell::RefCell, rc::Rc};
 
 use sdl2::{
-    render::WindowCanvas,
-    Sdl, image::InitFlag,
+    render::{WindowCanvas, TextureCreator},
+    Sdl, image::InitFlag, video::WindowContext,
 };
 use time::{Duration, Instant};
 
@@ -14,7 +14,7 @@ pub const MILLIS_PER_FRAME: i32 = 1000 / FPS;
 pub struct Context {
     pub sdl: Sdl,
     pub canvas: Rc<RefCell<WindowCanvas>>,
-    pub instant: Instant,
+    pub instant: Rc<RefCell<Instant>>,
     pub ticks_last_frame: Duration,
 }
 
@@ -36,13 +36,13 @@ impl Context {
         Self {
             sdl: sdl,
             canvas: Rc::new(RefCell::new(canvas)),
-            instant: Instant::now(),
+            instant: Rc::new(RefCell::new(Instant::now())),
             ticks_last_frame: Duration::milliseconds(0),
         }
     }
 
     pub fn get_delta_time(&mut self) -> Duration {
-        let elapsed = self.instant.elapsed();
+        let elapsed = self.instant.borrow().elapsed();
         let delta_time = elapsed - self.ticks_last_frame;
         self.ticks_last_frame = elapsed;
         delta_time

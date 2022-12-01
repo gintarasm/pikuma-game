@@ -4,7 +4,7 @@ use crate::ecs::world::World;
 #[test]
 fn create_entity() {
     let mut world = World::new();
-    let entity = world.create_entity();
+    let entity = world.create_entity().finish_entity();
     assert_eq!(entity.0, 0);
 }
 
@@ -50,16 +50,16 @@ mod resources {
     fn query_for_entities() {        
         let mut world = World::new();
 
-        let entity = world.create_entity();
+        let entity = world.create_entity().finish_entity();
         world.update();
         world.add_component(&entity, Location(1, 1));
         world.add_component(&entity, Size(10));
 
-        let entity2 = world.create_entity();
+        let entity2 = world.create_entity().finish_entity();
         world.update();
         world.add_component(&entity2, Location(11, 11));
 
-        let entity3 = world.create_entity();
+        let entity3 = world.create_entity().finish_entity();
         world.update();
         world.add_component(&entity3, Size(99));
 
@@ -69,13 +69,13 @@ mod resources {
     fn reuse_deleted_entity_ids() {
         let mut world = World::new();
 
-        let entity = world.create_entity();
+        let entity = world.create_entity().finish_entity();
         world.update();
         
         world.remove_entity(&entity);
         world.update();
 
-        let new_entity = world.create_entity();
+        let new_entity = world.create_entity().finish_entity();
         world.update();
 
         assert_eq!(entity.0, new_entity.0);
