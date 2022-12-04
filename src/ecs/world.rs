@@ -1,9 +1,15 @@
 use time::Duration;
 
 use crate::{ecs::command_buffer::WorldCommand, logger::Logger};
-use std::{any::{type_name, Any, TypeId}, cell::RefCell, collections::{HashMap, HashSet, VecDeque}};
+use std::{
+    any::{type_name, Any, TypeId},
+    cell::RefCell,
+    collections::{HashMap, HashSet, VecDeque},
+    rc::Rc,
+};
 
 use super::{
+    command_buffer::CommandBuffer,
     components::Component,
     entities::{self, entity_manager::EntityManager, Entity},
     query::Query,
@@ -148,7 +154,9 @@ impl<'a> World<'a> {
             for command in command_buffer.iterate() {
                 match command {
                     WorldCommand::RemoveEntity(id) => self.remove_entity(&Entity(*id)),
-                    WorldCommand::RemoveComponent(id, comp_id) => self.remove_component_with_id(&Entity(*id), comp_id),
+                    WorldCommand::RemoveComponent(id, comp_id) => {
+                        self.remove_component_with_id(&Entity(*id), comp_id)
+                    }
                     WorldCommand::AddComponent(id, comp) => todo!(),
                     WorldCommand::CreateEntity(components) => todo!(),
                 }
@@ -221,11 +229,9 @@ impl<'a> World<'a> {
         self.entity_manager.remove_component_for_id(entity, comp_id);
         self.logger.info(&format!(
             "Removing component {} from Entity Id = {}",
-            "Unknown",
-            entity.0
+            "Unknown", entity.0
         ));
     }
-
 
     pub fn has_component<T: Component + 'static>(&self, entity: &Entity) -> bool {
         self.entity_manager.has_component::<T>(entity).unwrap()
@@ -236,6 +242,10 @@ impl<'a> World<'a> {
     }
 
     pub fn query(&self) -> Query {
-        Query::new(&self.entity_manager, &self.entity_manager.component_manager, &self.resources)
+        Query::new(
+            &self.entity_manager,
+            &self.entity_manager.component_manager,
+            &self.resources,
+        )
     }
 }

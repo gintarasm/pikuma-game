@@ -12,6 +12,7 @@ pub enum WorldCommand {
 }
 
 
+#[derive(Default)]
 pub struct CommandBuffer {
     commands: VecDeque<WorldCommand>
 }
@@ -41,5 +42,9 @@ impl CommandBuffer {
 
     pub fn iterate(&self) -> impl Iterator<Item = &WorldCommand> {
         self.commands.iter()
+    }
+
+    pub fn into_iter(self) -> impl Iterator<Item = WorldCommand> {
+        self.commands.into_iter()
     }
 }
