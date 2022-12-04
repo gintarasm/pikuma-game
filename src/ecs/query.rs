@@ -1,14 +1,11 @@
-use std::cell::{Ref, RefMut};
+use std::{any::Any, cell::{Ref, RefMut}};
 
-use super::{
-    components::{comp_pool::CompPool, component_manager::ComponentManager},
-    entities::{Entity, entity_manager::EntityManager},
-    Component,
-};
+use super::{Component, components::{comp_pool::CompPool, component_manager::ComponentManager}, entities::{Entity, entity_manager::EntityManager}, resources::Resources};
 
 pub struct Query<'a> {
     component_manager: &'a ComponentManager<'a>,
-    entity_manager: &'a EntityManager<'a>
+    entity_manager: &'a EntityManager<'a>,
+    resources: &'a Resources,
 }
 
 pub struct ComponentQuery<'a> {
@@ -21,20 +18,28 @@ pub struct EntityQuery<'a> {
     entity_manager: &'a EntityManager<'a>
 }
 
+pub struct ResourceQuery<'a> {
+    resources: &'a Resources
+}
+
 
 impl<'a> Query<'a> {
-    pub fn new(entity_manager: &'a EntityManager, component_manager: &'a ComponentManager) -> Self {
-        Self { entity_manager, component_manager }
+    pub fn new(entity_manager: &'a EntityManager, component_manager: &'a ComponentManager, resources: &'a Resources) -> Self {
+        Self { entity_manager, component_manager, resources }
     }
 
-    pub fn components(self) -> ComponentQuery<'a> {
+    pub fn components(&self) -> ComponentQuery<'a> {
         ComponentQuery {
             component_manager: self.component_manager,
         }
     }
 
-    pub fn entities(self) -> EntityQuery<'a> {
+    pub fn entities(&self) -> EntityQuery<'a> {
         EntityQuery { signature: 0, entity_manager: self.entity_manager, component_manager: self.component_manager }
+    }
+
+    pub fn resources(&self) -> ResourceQuery<'a> {
+        ResourceQuery { resources: self.resources }
     }
 }
 
@@ -61,8 +66,14 @@ impl<'a> EntityQuery<'a> {
         self.entity_manager.entity_component_signatures
             .iter()
             .enumerate()
-            .filter(|(id, sig)| (**sig & signature) == signature)
+            .filter(|(_, sig)| (**sig & signature) == signature)
             .map(|(id, _)| Entity(id))
             .collect()
+    }
+}
+
+impl <'a> ResourceQuery<'a> {
+    pub fn get<T: Any + 'static>(self) -> &'a T {
+        self.resources.get_ref::<T>().unwrap()
     }
 }

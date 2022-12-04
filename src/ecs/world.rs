@@ -236,6 +236,6 @@ impl<'a> World<'a> {
     }
 
     pub fn query(&self) -> Query {
-        Query::new(&self.entity_manager, &self.entity_manager.component_manager)
+        Query::new(&self.entity_manager, &self.entity_manager.component_manager, &self.resources)
     }
 }

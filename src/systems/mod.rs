@@ -10,6 +10,7 @@ use time::{Duration, Instant};
 use crate::asset_store::{self, AssetStore};
 use crate::components::{AnimationComponent, BoxColliderComponent};
 use crate::ecs::command_buffer::CommandBuffer;
+use crate::ecs::query::Query;
 use crate::resources::DeltaTime;
 use crate::{
     components::{RigidBodyComponent, SpriteComponent, TransformComponent},
@@ -31,10 +32,10 @@ impl MovementSystem {
 }
 
 impl SystemAction for MovementSystem {
-    fn action(&mut self, world: &World, entities: &Vec<Entity>, _: &mut CommandBuffer) {
-        let mut transforms = world.query().components().get_mut::<TransformComponent>();
-        let rigid_bodies = world.query().components().get::<RigidBodyComponent>();
-        let delta_time = world.get_resource::<DeltaTime>().unwrap().0;
+    fn action(&mut self, query: Query, entities: &Vec<Entity>, _: &mut CommandBuffer) {
+        let mut transforms = query.components().get_mut::<TransformComponent>();
+        let rigid_bodies = query.components().get::<RigidBodyComponent>();
+        let delta_time = query.resources().get::<DeltaTime>().0;
         self.logger.info(&format!(
             "Movement system updating with entities {}",
             entities.len()
@@ -74,12 +75,11 @@ impl RenderSystem {
 }
 
 impl SystemAction for RenderSystem {
-    fn action(&mut self, world: &World, entities: &Vec<Entity>, _: &mut CommandBuffer) {
-        let transforms = world.query().components().get::<TransformComponent>();
-        let sprites = world.query().components().get::<SpriteComponent>();
-        let delta_time = world.get_resource::<DeltaTime>().unwrap().0;
+    fn action(&mut self, query: Query, entities: &Vec<Entity>, _: &mut CommandBuffer) {
+        let transforms = query.components().get::<TransformComponent>();
+        let sprites = query.components().get::<SpriteComponent>();
         let mut canvas = self.context.borrow_mut();
-        let asset_store = world.get_resource::<AssetStore>().unwrap();
+        let asset_store = query.resources().get::<AssetStore>();
 
         let mut components = entities
             .iter()
@@ -94,7 +94,6 @@ impl SystemAction for RenderSystem {
         components.sort_by(|a, b| a.1.layer.cmp(&b.1.layer));
 
         for (transform, sprite) in components {
-            let texture_creator = canvas.texture_creator();
             let texture = asset_store.get_texture(&sprite.asset_id);
             let src_rect = sprite.src;
 
@@ -132,9 +131,9 @@ pub struct AnimationSystem {
 }
 
 impl SystemAction for AnimationSystem {
-    fn action(&mut self, world: &World, entities: &Vec<Entity>, _: &mut CommandBuffer) {
-        let mut sprites = world.query().components().get_mut::<SpriteComponent>();
-        let mut animations = world.query().components().get_mut::<AnimationComponent>();
+    fn action(&mut self, query: Query, entities: &Vec<Entity>, _: &mut CommandBuffer) {
+        let mut sprites = query.components().get_mut::<SpriteComponent>();
+        let mut animations = query.components().get_mut::<AnimationComponent>();
 
         for entity in entities {
             let sprite = sprites.get_mut(entity.0).unwrap();
@@ -174,9 +173,9 @@ impl CollisionSystem {
 }
 
 impl SystemAction for CollisionSystem {
-    fn action(&mut self, world: &World, entities: &Vec<Entity>, command_buffer: &mut CommandBuffer) {
-        let transforms = world.query().components().get::<TransformComponent>();
-        let box_colliders = world.query().components().get::<BoxColliderComponent>();
+    fn action(&mut self, query: Query, entities: &Vec<Entity>, command_buffer: &mut CommandBuffer) {
+        let transforms = query.components().get::<TransformComponent>();
+        let box_colliders = query.components().get::<BoxColliderComponent>();
 
         for (i, entity_a) in entities.iter().enumerate() {
             let a_transform = transforms.get(entity_a.0).unwrap();
@@ -248,9 +247,9 @@ impl DebugSystem {
 }
 
 impl SystemAction for DebugSystem {
-    fn action(&mut self, world: &World, entities: &Vec<Entity>, _: &mut CommandBuffer) {
-        let transforms = world.query().components().get::<TransformComponent>();
-        let colliders = world.query().components().get::<BoxColliderComponent>();
+    fn action(&mut self, query: Query, entities: &Vec<Entity>, _: &mut CommandBuffer) {
+        let transforms = query.components().get::<TransformComponent>();
+        let colliders = query.components().get::<BoxColliderComponent>();
         let mut canvas = self.context.borrow_mut();
 
         for entity in entities {
@@ -262,7 +261,7 @@ impl SystemAction for DebugSystem {
             let collider_rect = Rect::new(start.x as i32, start.y as i32, collider.width, collider.height);
 
             canvas.set_draw_color(pixels::Color::GREEN);
-            canvas.draw_rect(collider_rect);
+            canvas.draw_rect(collider_rect).unwrap();
         }
     }
 

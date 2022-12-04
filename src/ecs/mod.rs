@@ -1,24 +1,31 @@
-use std::{any::TypeId, cell::RefMut, collections::{HashMap, VecDeque}, marker::PhantomData, process::Command};
+use std::{
+    any::TypeId,
+    cell::RefMut,
+    collections::{HashMap, VecDeque},
+    marker::PhantomData,
+    process::Command,
+};
 
 use time::Duration;
 
-use self::{command_buffer::CommandBuffer, components::Component, entities::Entity, world::World};
+use self::{command_buffer::CommandBuffer, components::Component, entities::Entity, query::Query, world::World};
 
-mod tests;
-pub mod entities;
-pub mod world;
-pub mod resources;
-pub mod query;
-pub mod components;
-pub mod errors;
 pub mod command_buffer;
+pub mod components;
+pub mod entities;
+pub mod errors;
+pub mod query;
+pub mod resources;
+pub mod events;
+mod tests;
+pub mod world;
 
 pub struct SystemBuilder<T: SystemAction + 'static> {
     comp_signatures: HashMap<TypeId, u32>,
     signature: u32,
     name: String,
     action: Box<dyn SystemAction>,
-    phantom: PhantomData<T>
+    phantom: PhantomData<T>,
 }
 
 impl<T: SystemAction + 'static> SystemBuilder<T> {
@@ -40,11 +47,11 @@ impl<T: SystemAction + 'static> SystemBuilder<T> {
     }
 
     pub fn build(self) -> System {
-       System {
+        System {
             signature: self.signature,
             entities: Vec::new(),
             action: self.action,
-            name: self.name
+            name: self.name,
         }
     }
 }
@@ -67,12 +74,14 @@ impl System {
 
     pub fn active(&mut self, world: &World) -> CommandBuffer {
         let mut buffer = CommandBuffer::new();
-        self.action.action(world, &self.entities, &mut buffer);
+        let query = world.query();
+        self.action.action(query, &self.entities, &mut buffer);
         buffer
     }
 }
 
 pub trait SystemAction {
-    fn action(&mut self, world: &World, entities: &Vec<Entity>, commands: &mut CommandBuffer);
+    fn action(&mut self, query: Query, entities: &Vec<Entity>, commands: &mut CommandBuffer);
     fn to_system(self, world: &World) -> System;
 }
+
