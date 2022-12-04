@@ -1,10 +1,16 @@
-use std::{any::{Any, TypeId}, cell::RefCell, collections::HashMap, marker::PhantomData, rc::Rc};
+use std::{
+    any::{Any, TypeId},
+    cell::RefCell,
+    collections::HashMap,
+    marker::PhantomData,
+    rc::Rc,
+};
 
 use super::{command_buffer::CommandBuffer, query::Query, world::World};
 
 pub trait GameEvent {}
 
-type GameEventHanlder<T: GameEvent> = fn(&T, Query, &mut CommandBuffer);
+type GameEventHanlder<T: GameEvent> = fn(&T, &Query, &mut CommandBuffer);
 
 trait EventHandlerStorage {
     fn as_any(&self) -> &dyn Any;
@@ -37,9 +43,8 @@ pub struct WorldEvents {
     handlers: Rc<RefCell<HashMap<TypeId, Box<dyn EventHandlerStorage>>>>,
 }
 
-pub struct EventEmitter<'a> {
+pub struct EventEmitter {
     handlers: Rc<RefCell<HashMap<TypeId, Box<dyn EventHandlerStorage>>>>,
-    world: &'a World<'a>,
 }
 
 pub trait WorldEventSubscriber {
@@ -47,7 +52,7 @@ pub trait WorldEventSubscriber {
 }
 
 pub trait WorldEventEmmiter {
-    fn emit<T: GameEvent + 'static>(&self, event: T, cmd_buffer: &mut CommandBuffer);
+    fn emit<T: GameEvent + 'static>(&self, event: T, cmd_buffer: &mut CommandBuffer, query: &Query);
 }
 
 impl WorldEvents {
@@ -57,17 +62,15 @@ impl WorldEvents {
         }
     }
 
-    pub fn emiter<'a>(&self, world: &'a World<'a>) -> EventEmitter<'a> {
-        EventEmitter::<'a> {
+    pub fn emiter(&self) -> EventEmitter {
+        EventEmitter {
             handlers: self.handlers.clone(),
-            world
         }
     }
 }
 
-
 impl WorldEventSubscriber for WorldEvents {
-        fn subscribe<T: GameEvent + 'static>(&mut self, handler: GameEventHanlder<T>) {
+    fn subscribe<T: GameEvent + 'static>(&mut self, handler: GameEventHanlder<T>) {
         let id = TypeId::of::<T>();
 
         self.handlers
@@ -86,31 +89,36 @@ impl WorldEventSubscriber for WorldEvents {
     }
 }
 
-impl <'a> WorldEventEmmiter for EventEmitter<'a> {
-    fn emit<T: GameEvent + 'static>(&self, event: T, cmd_buffer: &mut CommandBuffer) {
+impl WorldEventEmmiter for EventEmitter {
+    fn emit<T: GameEvent + 'static>(
+        &self,
+        event: T,
+        cmd_buffer: &mut CommandBuffer,
+        query: &Query,
+    ) {
         let id = TypeId::of::<T>();
-        let handlers = self
-            .handlers
-            .borrow()
-            .get(&id)
-            .unwrap()
-            .as_any()
-            .downcast_ref::<GameHandlerVec<T>>()
-            .unwrap();
-        for handler in handlers {
-            handler(&event, self.world.query(), cmd_buffer);
+
+        let all_handlers = self.handlers.borrow();
+
+        if let Some(handlers) = all_handlers.get(&id) {
+            let handlers = handlers
+                .as_any()
+                .downcast_ref::<GameHandlerVec<T>>()
+                .unwrap();
+            for handler in handlers.iter() {
+                handler(&event, query, cmd_buffer);
+            }
         }
     }
-
 }
 
 #[cfg(test)]
 mod test {
     use crate::ecs::{command_buffer::CommandBuffer, query::Query, world::World};
 
-    use super::WorldEvents;
     use super::WorldEventEmmiter;
     use super::WorldEventSubscriber;
+    use super::WorldEvents;
 
     #[derive(ecs_macro::GameEvent)]
     struct SomethingHappend;
@@ -125,16 +133,9 @@ mod test {
     #[test]
     fn register_handler() {
         let world = World::new();
-        let mut events = WorldEvents::new(&world);
-        events.subscribe::<SomethingHappend>(handle_something_happend);
+        let mut events = WorldEvents::new();
     }
 
     #[test]
-    fn emit_event() {
-        let world = World::new();
-        let mut cmd_buffer = CommandBuffer::new();
-        let mut events = WorldEvents::new(&world);
-        events.subscribe::<SomethingHappend>(handle_something_happend);
-        events.emit(SomethingHappend {}, &mut cmd_buffer);
-    }
+    fn emit_event() {}
 }

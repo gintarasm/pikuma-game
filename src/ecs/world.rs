@@ -13,7 +13,7 @@ use super::{
     components::Component,
     entities::{self, entity_manager::EntityManager, Entity},
     query::Query,
-    resources::Resources,
+    resources::Resources, events::{WorldEventSubscriber, WorldEvents, WorldEventEmmiter, EventEmitter},
 };
 use super::{System, SystemAction};
 
@@ -27,6 +27,7 @@ pub struct World<'a> {
     logger: Logger,
 
     current_entity: Option<Entity>,
+    events: WorldEvents,
 }
 
 impl<'a> World<'a> {
@@ -39,6 +40,7 @@ impl<'a> World<'a> {
             entities_to_remove: HashSet::new(),
             logger: Logger::new(),
             current_entity: None,
+            events: WorldEvents::new(),
         }
     }
 
@@ -115,6 +117,14 @@ impl<'a> World<'a> {
             });
 
         self.entity_manager.remove_entity(entity);
+    }
+    
+    pub fn events(&mut self) -> &mut impl WorldEventSubscriber {
+        &mut self.events
+    }
+
+    pub fn emiter(&self) -> EventEmitter {
+        self.events.emiter()
     }
 
     pub fn add_system<T: SystemAction + 'static>(&mut self, system_action: T, update: bool) {

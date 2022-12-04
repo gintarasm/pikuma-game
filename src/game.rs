@@ -14,12 +14,16 @@ use crate::components::{
     BoxColliderComponentBuilder, RigidBodyComponent, SpriteComponent, TransformComponent,
     TransformComponentBuilder,
 };
+use crate::ecs::command_buffer::CommandBuffer;
+use crate::ecs::entities::Entity;
+use crate::ecs::events::WorldEventSubscriber;
+use crate::ecs::query::Query;
 use crate::ecs::world::World;
 use crate::logger::Logger;
 use crate::map::load_map;
 use crate::resources::DeltaTime;
 use crate::sdl::{Context, MILLIS_PER_FRAME};
-use crate::systems::{AnimationSystem, CollisionSystem, DebugSystem, MovementSystem, RenderSystem};
+use crate::systems::{AnimationSystem, CollisionSystem, DebugSystem, MovementSystem, RenderSystem, Collision};
 
 pub struct Game<'a> {
     is_running: bool,
@@ -198,6 +202,8 @@ impl Game<'static> {
             instant: self.context.instant.clone(),
         }, false);
         self.world.add_system(CollisionSystem::new(), false);
+
+        self.world.events().subscribe(even_handler);
     }
 
     fn setup(&mut self) {
@@ -287,4 +293,10 @@ impl Game<'static> {
 
         self.context.canvas.borrow_mut().present()
     }
+}
+
+
+fn even_handler(event: &Collision, query: &Query, cmd_buffer: &mut CommandBuffer) {
+    cmd_buffer.remove_entity(&Entity(event.a));
+    cmd_buffer.remove_entity(&Entity(event.b));
 }

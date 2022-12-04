@@ -8,7 +8,7 @@ use std::{
 
 use time::Duration;
 
-use self::{command_buffer::CommandBuffer, components::Component, entities::Entity, query::Query, world::World};
+use self::{command_buffer::CommandBuffer, components::Component, entities::Entity, query::Query, world::World, events::{WorldEventEmmiter, EventEmitter}};
 
 pub mod command_buffer;
 pub mod components;
@@ -75,13 +75,14 @@ impl System {
     pub fn active(&mut self, world: &World) -> CommandBuffer {
         let mut buffer = CommandBuffer::new();
         let query = world.query();
-        self.action.action(query, &self.entities, &mut buffer);
+        let emiter = world.emiter();
+        self.action.action(query, &self.entities, &mut buffer, emiter);
         buffer
     }
 }
 
 pub trait SystemAction {
-    fn action(&mut self, query: Query, entities: &Vec<Entity>, commands: &mut CommandBuffer);
+    fn action(&mut self, query: Query, entities: &Vec<Entity>, commands: &mut CommandBuffer, emitter: EventEmitter);
     fn to_system(self, world: &World) -> System;
 }
 

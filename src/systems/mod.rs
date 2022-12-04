@@ -1,6 +1,7 @@
 use std::collections::VecDeque;
 use std::{cell::RefCell, rc::Rc};
 
+use ecs_macro::GameEvent;
 use sdl2::image::LoadTexture;
 use sdl2::pixels;
 use sdl2::render::WindowCanvas;
@@ -10,6 +11,7 @@ use time::{Duration, Instant};
 use crate::asset_store::{self, AssetStore};
 use crate::components::{AnimationComponent, BoxColliderComponent};
 use crate::ecs::command_buffer::CommandBuffer;
+use crate::ecs::events::{EventEmitter, WorldEventEmmiter};
 use crate::ecs::query::Query;
 use crate::resources::DeltaTime;
 use crate::{
@@ -32,7 +34,7 @@ impl MovementSystem {
 }
 
 impl SystemAction for MovementSystem {
-    fn action(&mut self, query: Query, entities: &Vec<Entity>, _: &mut CommandBuffer) {
+    fn action(&mut self, query: Query, entities: &Vec<Entity>, _: &mut CommandBuffer, emitter: EventEmitter) {
         let mut transforms = query.components().get_mut::<TransformComponent>();
         let rigid_bodies = query.components().get::<RigidBodyComponent>();
         let delta_time = query.resources().get::<DeltaTime>().0;
@@ -75,7 +77,7 @@ impl RenderSystem {
 }
 
 impl SystemAction for RenderSystem {
-    fn action(&mut self, query: Query, entities: &Vec<Entity>, _: &mut CommandBuffer) {
+    fn action(&mut self, query: Query, entities: &Vec<Entity>, _: &mut CommandBuffer, emitter: EventEmitter) {
         let transforms = query.components().get::<TransformComponent>();
         let sprites = query.components().get::<SpriteComponent>();
         let mut canvas = self.context.borrow_mut();
@@ -131,7 +133,7 @@ pub struct AnimationSystem {
 }
 
 impl SystemAction for AnimationSystem {
-    fn action(&mut self, query: Query, entities: &Vec<Entity>, _: &mut CommandBuffer) {
+    fn action(&mut self, query: Query, entities: &Vec<Entity>, _: &mut CommandBuffer, emitter: EventEmitter) {
         let mut sprites = query.components().get_mut::<SpriteComponent>();
         let mut animations = query.components().get_mut::<AnimationComponent>();
 
@@ -172,8 +174,15 @@ impl CollisionSystem {
     }
 }
 
+
+#[derive(GameEvent)]
+pub struct Collision {
+    pub a: usize,
+    pub b: usize
+}
+
 impl SystemAction for CollisionSystem {
-    fn action(&mut self, query: Query, entities: &Vec<Entity>, command_buffer: &mut CommandBuffer) {
+    fn action(&mut self, query: Query, entities: &Vec<Entity>, command_buffer: &mut CommandBuffer, emitter: EventEmitter) {
         let transforms = query.components().get::<TransformComponent>();
         let box_colliders = query.components().get::<BoxColliderComponent>();
 
@@ -204,9 +213,8 @@ impl SystemAction for CollisionSystem {
                         "Entity {} and {} collided",
                         entity_a.0, entity_b.0
                     ));
-
-                    command_buffer.remove_entity(entity_a);
-                    command_buffer.remove_entity(entity_b);
+                    
+                    emitter.emit(Collision {a: entity_a.0, b: entity_b.0}, command_buffer, &query);
                 }
             }
         }
@@ -247,7 +255,7 @@ impl DebugSystem {
 }
 
 impl SystemAction for DebugSystem {
-    fn action(&mut self, query: Query, entities: &Vec<Entity>, _: &mut CommandBuffer) {
+    fn action(&mut self, query: Query, entities: &Vec<Entity>, _: &mut CommandBuffer, emitter: EventEmitter) {
         let transforms = query.components().get::<TransformComponent>();
         let colliders = query.components().get::<BoxColliderComponent>();
         let mut canvas = self.context.borrow_mut();
