@@ -6,6 +6,7 @@ mod components;
 mod systems;
 mod asset_store;
 mod map;
+mod resources;
 
 use game::Game;
 

@@ -1,12 +1,16 @@
+use std::collections::VecDeque;
 use std::{cell::RefCell, rc::Rc};
 
 use sdl2::image::LoadTexture;
+use sdl2::pixels;
 use sdl2::render::WindowCanvas;
 use sdl2::{pixels::Color, rect::Rect};
 use time::{Duration, Instant};
 
 use crate::asset_store::{self, AssetStore};
 use crate::components::{AnimationComponent, BoxColliderComponent};
+use crate::ecs::command_buffer::CommandBuffer;
+use crate::resources::DeltaTime;
 use crate::{
     components::{RigidBodyComponent, SpriteComponent, TransformComponent},
     ecs::{entities::Entity, world::World, System, SystemAction, SystemBuilder},
@@ -27,9 +31,10 @@ impl MovementSystem {
 }
 
 impl SystemAction for MovementSystem {
-    fn action(&mut self, world: &World, entities: &Vec<Entity>, delta_time: &Duration) {
+    fn action(&mut self, world: &World, entities: &Vec<Entity>, _: &mut CommandBuffer) {
         let mut transforms = world.query().components().get_mut::<TransformComponent>();
         let rigid_bodies = world.query().components().get::<RigidBodyComponent>();
+        let delta_time = world.get_resource::<DeltaTime>().unwrap().0;
         self.logger.info(&format!(
             "Movement system updating with entities {}",
             entities.len()
@@ -58,23 +63,23 @@ impl SystemAction for MovementSystem {
 
 pub struct RenderSystem {
     context: Rc<RefCell<WindowCanvas>>,
-    asset_store: Rc<RefCell<AssetStore>>,
 }
 
 impl RenderSystem {
-    pub fn new(context: Rc<RefCell<WindowCanvas>>, asset_store: Rc<RefCell<AssetStore>>) -> Self {
+    pub fn new(context: Rc<RefCell<WindowCanvas>>) -> Self {
         Self {
             context,
-            asset_store,
         }
     }
 }
 
 impl SystemAction for RenderSystem {
-    fn action(&mut self, world: &World, entities: &Vec<Entity>, delta_time: &Duration) {
+    fn action(&mut self, world: &World, entities: &Vec<Entity>, _: &mut CommandBuffer) {
         let transforms = world.query().components().get::<TransformComponent>();
         let sprites = world.query().components().get::<SpriteComponent>();
+        let delta_time = world.get_resource::<DeltaTime>().unwrap().0;
         let mut canvas = self.context.borrow_mut();
+        let asset_store = world.get_resource::<AssetStore>().unwrap();
 
         let mut components = entities
             .iter()
@@ -90,7 +95,7 @@ impl SystemAction for RenderSystem {
 
         for (transform, sprite) in components {
             let texture_creator = canvas.texture_creator();
-            let texture = self.asset_store.borrow().get_texture(&sprite.asset_id);
+            let texture = asset_store.get_texture(&sprite.asset_id);
             let src_rect = sprite.src;
 
             let dst = Rect::new(
@@ -127,7 +132,7 @@ pub struct AnimationSystem {
 }
 
 impl SystemAction for AnimationSystem {
-    fn action(&mut self, world: &World, entities: &Vec<Entity>, _: &Duration) {
+    fn action(&mut self, world: &World, entities: &Vec<Entity>, _: &mut CommandBuffer) {
         let mut sprites = world.query().components().get_mut::<SpriteComponent>();
         let mut animations = world.query().components().get_mut::<AnimationComponent>();
 
@@ -169,17 +174,17 @@ impl CollisionSystem {
 }
 
 impl SystemAction for CollisionSystem {
-    fn action(&mut self, world: &World, entities: &Vec<Entity>, _: &Duration) {
+    fn action(&mut self, world: &World, entities: &Vec<Entity>, command_buffer: &mut CommandBuffer) {
         let transforms = world.query().components().get::<TransformComponent>();
         let box_colliders = world.query().components().get::<BoxColliderComponent>();
 
-        for (i, check_entity) in entities.iter().enumerate() {
-            let a_transform = transforms.get(check_entity.0).unwrap();
-            let a_collider = box_colliders.get(check_entity.0).unwrap();
+        for (i, entity_a) in entities.iter().enumerate() {
+            let a_transform = transforms.get(entity_a.0).unwrap();
+            let a_collider = box_colliders.get(entity_a.0).unwrap();
 
-            for entity in entities[i + 1..].iter() {
-                let b_transform = transforms.get(entity.0).unwrap();
-                let b_collider = box_colliders.get(entity.0).unwrap();
+            for entity_b in entities[i + 1..].iter() {
+                let b_transform = transforms.get(entity_b.0).unwrap();
+                let b_collider = box_colliders.get(entity_b.0).unwrap();
 
                 let a_offset = a_transform.position + a_collider.offset;
                 let b_offset = b_transform.position + b_collider.offset;
@@ -195,11 +200,14 @@ impl SystemAction for CollisionSystem {
                     b_collider.height,
                 );
 
-                if (collided) {
+                if collided {
                     self.logger.warn(&format!(
                         "Entity {} and {} collided",
-                        check_entity.0, entity.0
+                        entity_a.0, entity_b.0
                     ));
+
+                    command_buffer.remove_entity(entity_a);
+                    command_buffer.remove_entity(entity_b);
                 }
             }
         }
@@ -224,4 +232,44 @@ fn check_AABB_collision(
     b_height: u32,
 ) -> bool {
     a_x < b_x + b_width && a_x + b_width > b_x && a_y < b_y + b_height && a_y + a_height > b_y
+}
+
+
+pub struct DebugSystem {
+    context: Rc<RefCell<WindowCanvas>>,
+}
+
+impl DebugSystem {
+    pub fn new(context: Rc<RefCell<WindowCanvas>>) -> Self {
+        Self {
+            context,
+        }
+    }
+}
+
+impl SystemAction for DebugSystem {
+    fn action(&mut self, world: &World, entities: &Vec<Entity>, _: &mut CommandBuffer) {
+        let transforms = world.query().components().get::<TransformComponent>();
+        let colliders = world.query().components().get::<BoxColliderComponent>();
+        let mut canvas = self.context.borrow_mut();
+
+        for entity in entities {
+            let transform = transforms.get(entity.0).unwrap();
+            let collider = colliders.get(entity.0).unwrap();
+
+            let start = transform.position + collider.offset;
+
+            let collider_rect = Rect::new(start.x as i32, start.y as i32, collider.width, collider.height);
+
+            canvas.set_draw_color(pixels::Color::GREEN);
+            canvas.draw_rect(collider_rect);
+        }
+    }
+
+    fn to_system(self, world: &World) -> System {
+        SystemBuilder::new("DebugSystem", self, world.get_component_signatures())
+            .with_component::<TransformComponent>()
+            .with_component::<BoxColliderComponent>()
+            .build()
+    }
 }

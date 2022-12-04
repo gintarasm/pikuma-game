@@ -17,8 +17,9 @@ use crate::components::{
 use crate::ecs::world::World;
 use crate::logger::Logger;
 use crate::map::load_map;
+use crate::resources::DeltaTime;
 use crate::sdl::{Context, MILLIS_PER_FRAME};
-use crate::systems::{AnimationSystem, MovementSystem, RenderSystem, CollisionSystem};
+use crate::systems::{AnimationSystem, CollisionSystem, DebugSystem, MovementSystem, RenderSystem};
 
 pub struct Game<'a> {
     is_running: bool,
@@ -47,6 +48,7 @@ impl Game<'static> {
         self.setup();
         while self.is_running {
             let delta_time = self.context.get_delta_time();
+            self.world.add_resource(DeltaTime(delta_time));
             self.process_input(&mut event_pump);
             self.update(&delta_time);
             self.render(&delta_time);
@@ -56,27 +58,27 @@ impl Game<'static> {
     fn load_level(&mut self, level: i32) {
         let texture_creator: TextureCreator<WindowContext> =
             self.context.canvas.borrow().texture_creator();
-        let asset_store = Rc::new(RefCell::new(AssetStore::new(texture_creator)));
-        asset_store.borrow_mut().add_texture(
+        let mut asset_store = AssetStore::new(texture_creator);
+        asset_store.add_texture(
             "tank".to_owned(),
             "./assets/images/tank-tiger-right.png".to_owned(),
         );
-        asset_store.borrow_mut().add_texture(
+        asset_store.add_texture(
             "truck".to_owned(),
             "./assets/images/truck-ford-left.png".to_owned(),
         );
-        asset_store.borrow_mut().add_texture(
+        asset_store.add_texture(
             "chopper".to_owned(),
             "./assets/images/chopper.png".to_owned(),
         );
-        asset_store
-            .borrow_mut()
-            .add_texture("radar".to_owned(), "./assets/images/radar.png".to_owned());
+        asset_store.add_texture("radar".to_owned(), "./assets/images/radar.png".to_owned());
 
-        asset_store.borrow_mut().add_texture(
+        asset_store.add_texture(
             "jungle".to_owned(),
             "./assets/tilemaps/jungle.png".to_owned(),
         );
+
+        self.world.add_resource(asset_store);
         let map = load_map("./assets/tilemaps/jungle.map");
 
         map.tiles.iter().enumerate().for_each(|(i, tile)| {
@@ -189,13 +191,13 @@ impl Game<'static> {
                     .unwrap(),
             )
             .finish_entity();
-        self.world.add_system(MovementSystem::new());
+        self.world.add_system(MovementSystem::new(), false);
         self.world
-            .add_system(RenderSystem::new(self.context.canvas.clone(), asset_store));
+            .add_system(RenderSystem::new(self.context.canvas.clone()), false);
         self.world.add_system(AnimationSystem {
             instant: self.context.instant.clone(),
-        });
-        self.world.add_system(CollisionSystem::new());
+        }, false);
+        self.world.add_system(CollisionSystem::new(), false);
     }
 
     fn setup(&mut self) {
@@ -243,6 +245,18 @@ impl Game<'static> {
                     keycode: Some(Keycode::Right),
                     ..
                 } => {}
+                Event::KeyDown {
+                    keycode: Some(Keycode::D),
+                    ..
+                } => {
+                        if self.world.has_system::<DebugSystem>() {
+                            self.logger.error("Removing debug system");
+                            self.world.remove_system::<DebugSystem>();
+                        } else {
+                            self.logger.error("Adding debug system");
+                            self.world.add_system::<DebugSystem>(DebugSystem::new(self.context.canvas.clone()), true);
+                        }
+                    }
                 _ => {}
             }
         }
@@ -255,23 +269,21 @@ impl Game<'static> {
             ::std::thread::sleep(std::time::Duration::from_millis(time_to_wait as u64));
         }
 
-        let speed = Vec2::new(30.0, 0.0) * delta_time.as_seconds_f32();
-        self.player += speed;
-
         self.world.update();
-        self.world.update_system::<MovementSystem>(delta_time);
-        self.world.update_system::<CollisionSystem>(delta_time);
+        self.world.update_system::<MovementSystem>();
+        self.world.update_system::<CollisionSystem>();
     }
 
-    pub fn render(&mut self, delta_time: &Duration) {
+    pub fn render(&mut self, _: &Duration) {
         self.context
             .canvas
             .borrow_mut()
             .set_draw_color(Color::RGB(21, 21, 21));
         self.context.canvas.borrow_mut().clear();
 
-        self.world.update_system::<AnimationSystem>(delta_time);
-        self.world.update_system::<RenderSystem>(delta_time);
+        self.world.update_system::<AnimationSystem>();
+        self.world.update_system::<RenderSystem>();
+        self.world.update_system::<DebugSystem>();
 
         self.context.canvas.borrow_mut().present()
     }

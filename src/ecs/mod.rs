@@ -1,11 +1,8 @@
-use std::{
-    any::TypeId,
-    collections::HashMap, marker::PhantomData
-};
+use std::{any::TypeId, cell::RefMut, collections::{HashMap, VecDeque}, marker::PhantomData, process::Command};
 
 use time::Duration;
 
-use self::{world::World, components::Component, entities::Entity};
+use self::{command_buffer::CommandBuffer, components::Component, entities::Entity, world::World};
 
 mod tests;
 pub mod entities;
@@ -14,6 +11,7 @@ pub mod resources;
 pub mod query;
 pub mod components;
 pub mod errors;
+pub mod command_buffer;
 
 pub struct SystemBuilder<T: SystemAction + 'static> {
     comp_signatures: HashMap<TypeId, u32>,
@@ -67,12 +65,14 @@ impl System {
         self.entities.retain(|e| e.0 != entity.0);
     }
 
-    pub fn active(&mut self, world: &World, delta_time: &Duration) {
-        self.action.action(world, &self.entities, delta_time);
+    pub fn active(&mut self, world: &World) -> CommandBuffer {
+        let mut buffer = CommandBuffer::new();
+        self.action.action(world, &self.entities, &mut buffer);
+        buffer
     }
 }
 
 pub trait SystemAction {
-    fn action(&mut self, world: &World, entities: &Vec<Entity>, delta_time: &Duration);
+    fn action(&mut self, world: &World, entities: &Vec<Entity>, commands: &mut CommandBuffer);
     fn to_system(self, world: &World) -> System;
 }

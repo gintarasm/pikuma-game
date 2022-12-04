@@ -1,14 +1,11 @@
 use time::Duration;
 
-use crate::logger::Logger;
-use std::{
-    any::{type_name, Any, TypeId},
-    collections::{HashMap, HashSet}
-};
+use crate::{ecs::command_buffer::WorldCommand, logger::Logger};
+use std::{any::{type_name, Any, TypeId}, cell::RefCell, collections::{HashMap, HashSet, VecDeque}};
 
 use super::{
     components::Component,
-    entities::{entity_manager::EntityManager, Entity, self},
+    entities::{self, entity_manager::EntityManager, Entity},
     query::Query,
     resources::Resources,
 };
@@ -23,7 +20,7 @@ pub struct World<'a> {
     entities_to_remove: HashSet<Entity>,
     logger: Logger,
 
-    current_entity: Option<Entity>
+    current_entity: Option<Entity>,
 }
 
 impl<'a> World<'a> {
@@ -35,7 +32,7 @@ impl<'a> World<'a> {
             entities_to_add: HashSet::new(),
             entities_to_remove: HashSet::new(),
             logger: Logger::new(),
-            current_entity: None
+            current_entity: None,
         }
     }
 
@@ -60,13 +57,12 @@ impl<'a> World<'a> {
         self
     }
 
-
     pub fn with_component<T: Component + 'static>(&mut self, component: T) -> &mut Self {
         let entity = self.current_entity.unwrap();
         self.add_component(&entity, component);
         self
     }
-    
+
     pub fn finish_entity(&mut self) -> Entity {
         self.current_entity.unwrap()
     }
@@ -100,11 +96,10 @@ impl<'a> World<'a> {
         self.logger
             .info(&format!("Killing entity id = {}", entity.0));
 
-        let key = self.entity_manager.get_signature(&entity).unwrap().clone();
-        self.entity_manager.remove_entity(entity);
+        let key = self.entity_manager.get_signature(entity).unwrap();
         self.systems
             .values_mut()
-            .filter(|s| s.signature == key)
+            .filter(|s| (*key & s.signature) == s.signature)
             .for_each(|system| {
                 self.logger.info(&format!(
                     "Removing id = {} from system {}",
@@ -112,11 +107,22 @@ impl<'a> World<'a> {
                 ));
                 system.remove_entity(entity);
             });
+
+        self.entity_manager.remove_entity(entity);
     }
 
-    pub fn add_system<T: SystemAction + 'static>(&mut self, system_action: T) {
+    pub fn add_system<T: SystemAction + 'static>(&mut self, system_action: T, update: bool) {
         let system_id = TypeId::of::<T>();
-        let system = system_action.to_system(self);
+        let mut system = system_action.to_system(self);
+        let signature = system.signature.clone();
+        if update {
+            self.entity_manager
+                .entity_component_signatures
+                .iter()
+                .enumerate()
+                .filter(|(_, s)| (*s & signature) == signature)
+                .for_each(|(id, _)| system.add_entity(Entity(id)));
+        }
         self.logger.info(&format!("Adding systems {}", system.name));
         self.systems.insert(system_id, system);
         println!("systems add {:?}", self.systems.len());
@@ -130,12 +136,28 @@ impl<'a> World<'a> {
         }
     }
 
-    pub fn update_system<T: SystemAction + 'static>(&mut self, delta_time: &Duration) {
+    pub fn update_system<T: SystemAction + 'static>(&mut self) {
         let system_id = TypeId::of::<T>();
         let mut systems = std::mem::take(&mut self.systems);
-        let system = systems.get_mut(&system_id).unwrap();
-        self.logger.info(&format!("Updating system {}", system.name));
-        system.active(self, delta_time);
+        if let Some(system) = systems.get_mut(&system_id) {
+            self.logger
+                .info(&format!("Updating system {}", system.name));
+
+            let command_buffer = system.active(self);
+
+            for command in command_buffer.iterate() {
+                match command {
+                    WorldCommand::RemoveEntity(id) => self.remove_entity(&Entity(*id)),
+                    WorldCommand::RemoveComponent(id, comp_id) => self.remove_component_with_id(&Entity(*id), comp_id),
+                    WorldCommand::AddComponent(id, comp) => todo!(),
+                    WorldCommand::CreateEntity(components) => todo!(),
+                }
+            }
+        } else {
+            self.logger
+                .info(&format!("Skipping system {} update", type_name::<T>()));
+        }
+
         self.systems = std::mem::take(&mut systems);
     }
 
@@ -194,6 +216,16 @@ impl<'a> World<'a> {
             entity.0
         ));
     }
+
+    fn remove_component_with_id(&mut self, entity: &Entity, comp_id: &TypeId) {
+        self.entity_manager.remove_component_for_id(entity, comp_id);
+        self.logger.info(&format!(
+            "Removing component {} from Entity Id = {}",
+            "Unknown",
+            entity.0
+        ));
+    }
+
 
     pub fn has_component<T: Component + 'static>(&self, entity: &Entity) -> bool {
         self.entity_manager.has_component::<T>(entity).unwrap()

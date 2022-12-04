@@ -71,6 +71,16 @@ impl<'a> ComponentManager<'a> {
         }
     }
 
+    pub fn remove_with_id(&mut self, entity: &Entity, comp_id: &TypeId) -> Result<(), EcsErrors> {
+        if let Some(pool) = self.component_pools.get_mut(&comp_id) {
+            pool.remove_any(entity);
+
+            Ok(())
+        } else {
+            Err(EcsErrors::ComponentDoesNotExist("Unknown".to_owned()))
+        }
+    }
+
     pub fn remove_all(&mut self, entity: &Entity) {
         self.component_pools
             .values_mut()
@@ -115,4 +125,13 @@ impl<'a> ComponentManager<'a> {
             Err(EcsErrors::component_does_not_exist::<T>())
         }
     }
+
+    pub fn get_mask_for_id(&self, comp_id: &TypeId) ->  Result<&u32, EcsErrors> {
+        if let Some(mask) = self.component_bit_masks.get(comp_id) {
+            Ok(mask)
+        } else {
+            Err(EcsErrors::ComponentDoesNotExist("Unknown".to_owned()))
+        }
+    }
+
 }

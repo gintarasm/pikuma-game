@@ -31,7 +31,8 @@ impl Context {
             .build()
             .unwrap();
 
-        let canvas = window.into_canvas().build().unwrap();
+        let mut canvas = window.into_canvas().build().unwrap();
+        canvas.set_blend_mode(sdl2::render::BlendMode::Blend);
 
         Self {
             sdl: sdl,

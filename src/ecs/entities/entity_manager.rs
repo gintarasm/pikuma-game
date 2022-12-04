@@ -1,5 +1,5 @@
 use std::any::{type_name, TypeId};
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 use crate::ecs::components::component_manager::ComponentManager;
 use crate::ecs::errors::EcsErrors;
@@ -9,14 +9,14 @@ use super::Entity;
 
 struct EntityIdGenerator {
     current_free_id: usize,
-    freed_entities: Vec<usize>,
+    freed_entities: VecDeque<usize>,
 }
 
 impl EntityIdGenerator {
     pub fn new() -> Self {
         Self {
             current_free_id: 0,
-            freed_entities: vec![],
+            freed_entities: VecDeque::new(),
         }
     }
 
@@ -26,12 +26,12 @@ impl EntityIdGenerator {
             self.current_free_id += 1;
             id
         } else {
-            self.freed_entities.pop().unwrap()
+            self.freed_entities.pop_front().unwrap()
         }
     }
 
     pub fn free_id(&mut self, id: usize) {
-        self.freed_entities.push(id)
+        self.freed_entities.push_back(id)
     }
 
     pub fn is_id_used(&self, id: usize) -> bool {
@@ -116,6 +116,27 @@ impl<'a> EntityManager<'a> {
 
         Ok(())
     }
+    pub fn remove_component_for_id(
+        &mut self,
+        entity: &Entity,
+        comp_id: &TypeId
+    ) -> Result<(), EcsErrors> {
+        if !self.id_generator.is_id_used(entity.0) {
+            return Err(EcsErrors::EntityDoesNotExist(entity.0));
+        }
+
+        let comp_mask = self.component_manager.get_mask_for_id(comp_id).unwrap();
+        self.entity_component_signatures[entity.0] &= !comp_mask;
+        self.component_manager.remove_with_id(entity, comp_id);
+
+        self.logger.info(&format!(
+            "Removing component {} from Entity Id = {}",
+            "Unknown",
+            entity.0
+        ));
+
+        Ok(())
+    }
 
     pub fn has_component<T: Component + 'static>(
         &self,
@@ -129,7 +150,7 @@ impl<'a> EntityManager<'a> {
 
         let signature = self.entity_component_signatures.get(entity.0).unwrap();
 
-        Ok((*signature &comp_mask) == *comp_mask)
+        Ok((*signature & comp_mask) == *comp_mask)
     }
 
     pub fn get_signature(&self, entity: &Entity) -> Result<&u32, EcsErrors> {
@@ -137,10 +158,7 @@ impl<'a> EntityManager<'a> {
             return Err(EcsErrors::EntityDoesNotExist(entity.0));
         }
 
-        Ok(self
-            .entity_component_signatures
-            .get(entity.0)
-            .unwrap())
+        Ok(self.entity_component_signatures.get(entity.0).unwrap())
     }
 
     pub fn get_component_signatures(&self) -> HashMap<TypeId, u32> {
