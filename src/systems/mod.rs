@@ -1,44 +1,54 @@
-use std::collections::VecDeque;
 use std::{cell::RefCell, rc::Rc};
 
-use ecs_macro::GameEvent;
-use sdl2::image::LoadTexture;
+use sdl2::keyboard::Keycode;
 use sdl2::pixels;
+use sdl2::rect::Rect;
 use sdl2::render::WindowCanvas;
-use sdl2::{pixels::Color, rect::Rect};
-use time::{Duration, Instant};
+use time::Instant;
 
-use crate::asset_store::{self, AssetStore};
-use crate::components::{AnimationComponent, BoxColliderComponent};
+use crate::asset_store::AssetStore;
+use crate::components::{
+    AnimationComponent, BoxColliderComponent, CameraFollowComponent, KeyboardControlledComponent, SpriteLayer,
+};
 use crate::ecs::command_buffer::CommandBuffer;
 use crate::ecs::events::{EventEmitter, WorldEventEmmiter};
 use crate::ecs::query::Query;
+use crate::game::{Camera, MapDimensions, self};
 use crate::resources::DeltaTime;
 use crate::{
     components::{RigidBodyComponent, SpriteComponent, TransformComponent},
     ecs::{entities::Entity, world::World, System, SystemAction, SystemBuilder},
     logger::Logger,
-    sdl::Context,
 };
 
-pub struct MovementSystem {
-    logger: Logger,
-}
+use self::events::{Collision, KeyPressed};
+
+pub mod events;
+
+pub struct MovementSystem {}
 
 impl MovementSystem {
     pub fn new() -> Self {
-        Self {
-            logger: Logger::new(),
-        }
+        Self {}
     }
 }
 
 impl SystemAction for MovementSystem {
-    fn action(&mut self, query: Query, entities: &Vec<Entity>, _: &mut CommandBuffer, emitter: EventEmitter) {
+    fn action(
+        &mut self,
+        query: Query,
+        entities: &Vec<Entity>,
+        _: &mut CommandBuffer,
+        _: EventEmitter,
+    ) {
         let mut transforms = query.components().get_mut::<TransformComponent>();
         let rigid_bodies = query.components().get::<RigidBodyComponent>();
-        let delta_time = query.resources().get::<DeltaTime>().0;
-        self.logger.info(&format!(
+        let delta_time = query.resources.get::<DeltaTime>().borrow().get::<DeltaTime>().0;
+
+        let mut logger_r = query.resources.get::<Logger>().borrow_mut();
+        let mut logger = logger_r.get_mut::<Logger>();
+
+        logger.info(&format!(
             "Movement system updating with entities {}",
             entities.len()
         ));
@@ -49,7 +59,7 @@ impl SystemAction for MovementSystem {
 
             transform.position += rigid_body.velocity * delta_time.as_seconds_f32();
 
-            self.logger.info(&format!(
+            logger.info(&format!(
                 "Entity {} new position is now ({}, {})",
                 ent.0, transform.position.x, transform.position.y
             ));
@@ -70,20 +80,29 @@ pub struct RenderSystem {
 
 impl RenderSystem {
     pub fn new(context: Rc<RefCell<WindowCanvas>>) -> Self {
-        Self {
-            context,
-        }
+        Self { context }
     }
 }
 
 impl SystemAction for RenderSystem {
-    fn action(&mut self, query: Query, entities: &Vec<Entity>, _: &mut CommandBuffer, emitter: EventEmitter) {
+    fn action(
+        &mut self,
+        query: Query,
+        entities: &Vec<Entity>,
+        _: &mut CommandBuffer,
+        _: EventEmitter,
+    ) {
+        let asset_store_r = query.resources.get::<AssetStore>().borrow();
+        let asset_store = asset_store_r.get::<AssetStore>();
+        
+        let camera_r = query.resources.get::<Camera>().borrow();
+        let camera = camera_r.get::<Camera>();
+
         let transforms = query.components().get::<TransformComponent>();
         let sprites = query.components().get::<SpriteComponent>();
         let mut canvas = self.context.borrow_mut();
-        let asset_store = query.resources().get::<AssetStore>();
 
-        let mut components = entities
+        let (mut ui, mut other): (Vec<_>, Vec<_>) = entities
             .iter()
             .map(|entity| {
                 (
@@ -91,11 +110,36 @@ impl SystemAction for RenderSystem {
                     sprites.get(entity.0).unwrap(),
                 )
             })
-            .collect::<Vec<(&TransformComponent, &SpriteComponent)>>();
+            .partition(|(_, sprite)| matches!(sprite.layer, SpriteLayer::Ui(_)));
 
-        components.sort_by(|a, b| a.1.layer.cmp(&b.1.layer));
+        other.sort_by(|a, b| a.1.layer.cmp(&b.1.layer));
+        ui.sort_by(|a, b| a.1.layer.cmp(&b.1.layer));
 
-        for (transform, sprite) in components {
+        for (transform, sprite) in other {
+            let texture = asset_store.get_texture(&sprite.asset_id);
+            let src_rect = sprite.src;
+
+            let dst = Rect::new(
+                transform.position.x as i32 - camera.rect.x,
+                transform.position.y as i32 - camera.rect.y,
+                sprite.width * transform.scale.x as u32,
+                sprite.height * transform.scale.y as u32,
+            );
+
+            canvas
+                .copy_ex(
+                    &texture,
+                    Some(src_rect),
+                    Some(dst),
+                    transform.rotation as f64,
+                    None,
+                    false,
+                    false,
+                )
+                .unwrap();
+        }
+
+        for (transform, sprite) in ui {
             let texture = asset_store.get_texture(&sprite.asset_id);
             let src_rect = sprite.src;
 
@@ -133,7 +177,13 @@ pub struct AnimationSystem {
 }
 
 impl SystemAction for AnimationSystem {
-    fn action(&mut self, query: Query, entities: &Vec<Entity>, _: &mut CommandBuffer, emitter: EventEmitter) {
+    fn action(
+        &mut self,
+        query: Query,
+        entities: &Vec<Entity>,
+        _: &mut CommandBuffer,
+        _: EventEmitter,
+    ) {
         let mut sprites = query.components().get_mut::<SpriteComponent>();
         let mut animations = query.components().get_mut::<AnimationComponent>();
 
@@ -162,29 +212,27 @@ impl SystemAction for AnimationSystem {
     }
 }
 
-pub struct CollisionSystem {
-    logger: Logger,
-}
+pub struct CollisionSystem {}
 
 impl CollisionSystem {
     pub fn new() -> Self {
-        Self {
-            logger: Logger::new(),
-        }
+        Self {}
     }
 }
 
-
-#[derive(GameEvent)]
-pub struct Collision {
-    pub a: usize,
-    pub b: usize
-}
-
 impl SystemAction for CollisionSystem {
-    fn action(&mut self, query: Query, entities: &Vec<Entity>, command_buffer: &mut CommandBuffer, emitter: EventEmitter) {
+    fn action(
+        &mut self,
+        query: Query,
+        entities: &Vec<Entity>,
+        command_buffer: &mut CommandBuffer,
+        emitter: EventEmitter,
+    ) {
         let transforms = query.components().get::<TransformComponent>();
         let box_colliders = query.components().get::<BoxColliderComponent>();
+
+        let mut logger_r = query.resources.get::<Logger>().borrow_mut();
+        let mut logger = logger_r.get_mut::<Logger>();
 
         for (i, entity_a) in entities.iter().enumerate() {
             let a_transform = transforms.get(entity_a.0).unwrap();
@@ -209,12 +257,19 @@ impl SystemAction for CollisionSystem {
                 );
 
                 if collided {
-                    self.logger.warn(&format!(
+                    logger.warn(&format!(
                         "Entity {} and {} collided",
                         entity_a.0, entity_b.0
                     ));
-                    
-                    emitter.emit(Collision {a: entity_a.0, b: entity_b.0}, command_buffer, &query);
+
+                    emitter.emit(
+                        Collision {
+                            a: entity_a.0,
+                            b: entity_b.0,
+                        },
+                        command_buffer,
+                        &query,
+                    );
                 }
             }
         }
@@ -238,9 +293,8 @@ fn check_AABB_collision(
     b_width: u32,
     b_height: u32,
 ) -> bool {
-    a_x < b_x + b_width && a_x + b_width > b_x && a_y < b_y + b_height && a_y + a_height > b_y
+    a_x < b_x + b_width && a_x + a_width > b_x && a_y < b_y + b_height && a_y + a_height > b_y
 }
-
 
 pub struct DebugSystem {
     context: Rc<RefCell<WindowCanvas>>,
@@ -248,14 +302,23 @@ pub struct DebugSystem {
 
 impl DebugSystem {
     pub fn new(context: Rc<RefCell<WindowCanvas>>) -> Self {
-        Self {
-            context,
-        }
+        Self { context }
     }
 }
 
 impl SystemAction for DebugSystem {
-    fn action(&mut self, query: Query, entities: &Vec<Entity>, _: &mut CommandBuffer, emitter: EventEmitter) {
+    fn action(
+        &mut self,
+        query: Query,
+        entities: &Vec<Entity>,
+        _: &mut CommandBuffer,
+        _: EventEmitter,
+    ) {
+
+
+        let camera_r = query.resources.get::<Camera>().borrow();
+        let camera = camera_r.get::<Camera>();
+
         let transforms = query.components().get::<TransformComponent>();
         let colliders = query.components().get::<BoxColliderComponent>();
         let mut canvas = self.context.borrow_mut();
@@ -266,7 +329,12 @@ impl SystemAction for DebugSystem {
 
             let start = transform.position + collider.offset;
 
-            let collider_rect = Rect::new(start.x as i32, start.y as i32, collider.width, collider.height);
+            let collider_rect = Rect::new(
+                start.x as i32 - camera.rect.x,
+                start.y as i32 - camera.rect.y,
+                collider.width * transform.scale.x as u32,
+                collider.height * transform.scale.y as u32,
+            );
 
             canvas.set_draw_color(pixels::Color::GREEN);
             canvas.draw_rect(collider_rect).unwrap();
@@ -279,4 +347,101 @@ impl SystemAction for DebugSystem {
             .with_component::<BoxColliderComponent>()
             .build()
     }
+}
+
+pub struct CameraMovementSystem;
+
+impl SystemAction for CameraMovementSystem {
+    fn action(
+        &mut self,
+        query: Query,
+        entities: &Vec<Entity>,
+        _: &mut CommandBuffer,
+        _: EventEmitter,
+    ) {
+
+        let map_dimensions_r = query.resources.get::<MapDimensions>().borrow();
+        let map_dimensions = map_dimensions_r.get::<MapDimensions>();
+
+        let mut camera_r = query.resources.get::<Camera>().borrow_mut();
+        let mut camera = camera_r.get_mut::<Camera>();
+        
+        let transforms = query.components().get::<TransformComponent>();
+        for entity in entities {
+            let transfrom = transforms.get(entity.0).unwrap();
+
+            let transform_x = transfrom.position.x as i32;
+            let transform_y = transfrom.position.y as i32;
+
+            if transform_x + (camera.rect.w / 2) < map_dimensions.width {
+                camera.rect.x = transform_x - (game::WINDOW_WIDTH / 2) as i32;
+            }
+
+            if transform_y + (camera.rect.h / 2) < map_dimensions.height {
+                camera.rect.y = transform_y - (game::WINDOW_HEIGHT / 2) as i32;
+            }
+
+            camera.rect.x = if camera.rect.x < 0 { 0 } else { camera.rect.x };
+            camera.rect.x = if camera.rect.x > camera.rect.w { camera.rect.w } else { camera.rect.x };
+            camera.rect.y = if camera.rect.y < 0 { 0 } else { camera.rect.y };
+            camera.rect.y = if camera.rect.y > camera.rect.h { camera.rect.h } else { camera.rect.y };
+        }
+    }
+
+    fn to_system(self, world: &World) -> System {
+        SystemBuilder::new(
+            "CameraMovementSystem",
+            self,
+            world.get_component_signatures(),
+        )
+        .with_component::<CameraFollowComponent>()
+        .with_component::<TransformComponent>()
+        .build()
+    }
+}
+
+pub fn collision_event_handler(event: &Collision, _: &Query, cmd_buffer: &mut CommandBuffer) {
+    cmd_buffer.remove_entity(&Entity(event.a));
+    cmd_buffer.remove_entity(&Entity(event.b));
+}
+
+pub fn key_pressed_hanlder(event: &KeyPressed, query: &Query, cmd_buffer: &mut CommandBuffer) {
+    let mut logger_r = query.resources.get::<Logger>().borrow_mut();
+    let mut logger = logger_r.get_mut::<Logger>();
+
+    let keyboard_components = query.components().get::<KeyboardControlledComponent>();
+    let mut sprites = query.components().get_mut::<SpriteComponent>();
+    let mut rigid_bodies = query.components().get_mut::<RigidBodyComponent>();
+
+    for (id, keyboard_comp) in keyboard_components
+        .iter()
+        .enumerate()
+        .filter(|(_, comp)| comp.is_some())
+    {
+        let mut sprite = sprites.get_mut(id).unwrap();
+        let mut rigid_body = rigid_bodies.get_mut(id).unwrap();
+        let keyboard_comp = keyboard_comp.as_ref().unwrap();
+
+        match event.key {
+            Keycode::Up => {
+                rigid_body.velocity = keyboard_comp.up_velocity;
+                sprite.src.y = sprite.height as i32 * 3;
+            }
+            Keycode::Right => {
+                rigid_body.velocity = keyboard_comp.right_velocity;
+                sprite.src.y = 0;
+            }
+            Keycode::Down => {
+                rigid_body.velocity = keyboard_comp.down_velocity;
+                sprite.src.y = sprite.height as i32;
+            }
+            Keycode::Left => {
+                rigid_body.velocity = keyboard_comp.left_velocity;
+                sprite.src.y = sprite.height as i32 * 2;
+            }
+            _ => {}
+        }
+    }
+
+    logger.error(&format!("Key pressed {}", event.key));
 }

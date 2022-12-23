@@ -1,10 +1,30 @@
 use std::{
     any::{Any, TypeId},
-    collections::HashMap,
+    collections::HashMap, cell::RefCell,
 };
 
+pub struct Resource {
+    data: Box<dyn Any>,
+}
+
+impl Resource {
+    fn new<T: Any>(data: T) -> Self {
+        Self {
+            data: Box::new(data),
+        }
+    }
+
+    pub fn get<T: Any>(&self) -> &T {
+        self.data.downcast_ref().unwrap()
+    }
+
+    pub fn get_mut<T: Any>(&mut self) -> &mut T {
+        self.data.downcast_mut().unwrap()
+    }
+}
+
 pub struct Resources {
-    data: HashMap<TypeId, Box<dyn Any>>,
+    data: HashMap<TypeId, RefCell<Resource>>,
 }
 
 impl Resources {
@@ -16,19 +36,15 @@ impl Resources {
 
     pub fn add(&mut self, resource: impl Any) {
         let type_id = resource.type_id();
-        self.data.insert(type_id, Box::new(resource));
+        self.data.insert(type_id, RefCell::new(Resource::new(resource)));
     }
 
-    pub fn get_ref<T: Any>(&self) -> Option<&T> {
+    pub fn get<T: Any>(&self) -> &RefCell<Resource> {
         let type_id = TypeId::of::<T>();
 
-        self.data.get(&type_id)?.downcast_ref()
-    }
-
-    pub fn get_ref_mut<T: Any>(&mut self) -> Option<&mut T> {
-        let type_id = TypeId::of::<T>();
-
-        self.data.get_mut(&type_id)?.downcast_mut()
+        self.data
+            .get(&type_id)
+            .unwrap()
     }
 
     pub fn delete<T: Any>(&mut self) {
@@ -36,71 +52,4 @@ impl Resources {
 
         self.data.remove(&type_id);
     }
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    #[allow(clippy::float_cmp)]
-    fn add_resource() {
-        let mut resources = Resources::new();
-        let world_width = WorldWidth(100.0);
-        let world_width_type_id = world_width.type_id();
-
-        resources.add(world_width);
-
-        let stored_resource = resources
-            .data
-            .get(&world_width_type_id)
-            .unwrap()
-            .downcast_ref::<WorldWidth>()
-            .unwrap();
-
-        assert_eq!(stored_resource.0, 100.0);
-    }
-
-    #[test]
-    fn get_resource() {
-        let mut resources = Resources::new();
-        let world_width = WorldWidth(100.0);
-
-        resources.add(world_width);
-
-        let stored_resource = resources.get_ref::<WorldWidth>().unwrap();
-
-        assert_eq!(stored_resource.0, 100.0);
-    }
-
-    #[test]
-    fn get_resource_mut() {
-        let mut resources = Resources::new();
-        let world_width = WorldWidth(100.0);
-
-        resources.add(world_width);
-        {
-            let stored_resource = resources.get_ref_mut::<WorldWidth>().unwrap();
-            stored_resource.0 += 1.0;
-        }
-
-        let stored_resource = resources.get_ref::<WorldWidth>().unwrap();
-
-        assert_eq!(stored_resource.0, 101.0);
-    }
-
-    #[test]
-    fn delete_resource() {
-        let mut resources = Resources::new();
-        let world_width = WorldWidth(100.0);
-        
-        resources.add(world_width);
-        resources.delete::<WorldWidth>();
-
-        let stored_resource = resources.get_ref::<WorldWidth>();
-
-        assert!(stored_resource.is_none());
-    }
-
-    struct WorldWidth(pub f32);
 }

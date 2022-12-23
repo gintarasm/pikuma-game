@@ -94,3 +94,17 @@ pub struct BoxColliderComponent {
     pub offset: Vec2
 }
 
+#[derive(Debug, Clone, Component, Builder)]
+pub struct KeyboardControlledComponent {
+    #[builder(default = "Vec2::ZERO")]
+    pub up_velocity: Vec2,
+    #[builder(default = "Vec2::ZERO")]
+    pub right_velocity: Vec2,
+    #[builder(default = "Vec2::ZERO")]
+    pub down_velocity: Vec2,
+    #[builder(default = "Vec2::ZERO")]
+    pub left_velocity: Vec2
+}
+
+#[derive(Debug, Clone, Component)]
+pub struct CameraFollowComponent;

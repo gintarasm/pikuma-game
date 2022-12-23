@@ -1,11 +1,21 @@
-use std::{any::Any, cell::{Ref, RefMut}};
+use std::{
+    any::Any,
+    cell::{Ref, RefCell, RefMut},
+    marker::PhantomData,
+    rc::Rc,
+};
 
-use super::{Component, components::{comp_pool::CompPool, component_manager::ComponentManager}, entities::{Entity, entity_manager::EntityManager}, resources::Resources};
+use super::{
+    components::{comp_pool::CompPool, component_manager::ComponentManager},
+    entities::{entity_manager::EntityManager, Entity},
+    resources::{Resource, Resources},
+    Component,
+};
 
 pub struct Query<'a> {
     component_manager: &'a ComponentManager<'a>,
     entity_manager: &'a EntityManager<'a>,
-    resources: &'a Resources,
+    pub resources: &'a Resources,
 }
 
 pub struct ComponentQuery<'a> {
@@ -15,17 +25,20 @@ pub struct ComponentQuery<'a> {
 pub struct EntityQuery<'a> {
     signature: u32,
     component_manager: &'a ComponentManager<'a>,
-    entity_manager: &'a EntityManager<'a>
+    entity_manager: &'a EntityManager<'a>,
 }
-
-pub struct ResourceQuery<'a> {
-    resources: &'a Resources
-}
-
 
 impl<'a> Query<'a> {
-    pub fn new(entity_manager: &'a EntityManager, component_manager: &'a ComponentManager, resources: &'a Resources) -> Self {
-        Self { entity_manager, component_manager, resources }
+    pub fn new(
+        entity_manager: &'a EntityManager,
+        component_manager: &'a ComponentManager,
+        resources: &'a Resources,
+    ) -> Self {
+        Self {
+            entity_manager,
+            component_manager,
+            resources,
+        }
     }
 
     pub fn components(&self) -> ComponentQuery<'a> {
@@ -35,11 +48,30 @@ impl<'a> Query<'a> {
     }
 
     pub fn entities(&self) -> EntityQuery<'a> {
-        EntityQuery { signature: 0, entity_manager: self.entity_manager, component_manager: self.component_manager }
+        EntityQuery {
+            signature: 0,
+            entity_manager: self.entity_manager,
+            component_manager: self.component_manager,
+        }
     }
 
-    pub fn resources(&self) -> ResourceQuery<'a> {
-        ResourceQuery { resources: self.resources }
+    pub fn resource<T: Any>(&self) -> Ref<Resource> {
+        self.resources.get::<T>().borrow()
+    }
+
+    pub fn resource_mut<T: Any>(&self) -> RefMut<Resource> {
+        self.resources.get::<T>().borrow_mut()
+    }
+}
+
+pub struct QResource<'a, T> {
+    r: Ref<'a, Resource>,
+    p: PhantomData<T>,
+}
+
+impl<'a, T> QResource<'a, T> {
+    pub fn get(&self) -> &'a T {
+        self.r.get::<T>()
     }
 }
 
@@ -63,17 +95,12 @@ impl<'a> EntityQuery<'a> {
     pub fn get(self) -> Vec<Entity> {
         let signature = self.signature;
 
-        self.entity_manager.entity_component_signatures
+        self.entity_manager
+            .entity_component_signatures
             .iter()
             .enumerate()
             .filter(|(_, sig)| (**sig & signature) == signature)
             .map(|(id, _)| Entity(id))
             .collect()
-    }
-}
-
-impl <'a> ResourceQuery<'a> {
-    pub fn get<T: Any + 'static>(self) -> &'a T {
-        self.resources.get_ref::<T>().unwrap()
     }
 }

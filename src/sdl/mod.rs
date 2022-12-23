@@ -26,7 +26,7 @@ impl Context {
         let window = video_subsystem
             .window(name, height, width)
             .position_centered()
-            // .fullscreen()
+            //.fullscreen()
             // .borderless()
             .build()
             .unwrap();

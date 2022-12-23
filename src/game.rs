@@ -1,6 +1,3 @@
-use std::cell::RefCell;
-use std::rc::Rc;
-
 use glam::Vec2;
 use sdl2::rect::Rect;
 use sdl2::render::TextureCreator;
@@ -10,38 +7,40 @@ use time::Duration;
 
 use crate::asset_store::AssetStore;
 use crate::components::{
-    AnimationComponent, AnimationComponentBuilder, BoxColliderComponent,
-    BoxColliderComponentBuilder, RigidBodyComponent, SpriteComponent, TransformComponent,
-    TransformComponentBuilder,
+    AnimationComponentBuilder, BoxColliderComponentBuilder, CameraFollowComponent,
+    KeyboardControlledComponent, KeyboardControlledComponentBuilder, RigidBodyComponent,
+    SpriteComponent, TransformComponent, TransformComponentBuilder,
 };
-use crate::ecs::command_buffer::CommandBuffer;
-use crate::ecs::entities::Entity;
 use crate::ecs::events::WorldEventSubscriber;
-use crate::ecs::query::Query;
 use crate::ecs::world::World;
 use crate::logger::Logger;
 use crate::map::load_map;
 use crate::resources::DeltaTime;
 use crate::sdl::{Context, MILLIS_PER_FRAME};
-use crate::systems::{AnimationSystem, CollisionSystem, DebugSystem, MovementSystem, RenderSystem, Collision};
+use crate::systems::events::KeyPressed;
+use crate::systems::{
+    collision_event_handler, key_pressed_hanlder, AnimationSystem, CollisionSystem, DebugSystem,
+    MovementSystem, RenderSystem, CameraMovementSystem,
+};
+
+pub const WINDOW_WIDTH: u32 = 800;
+pub const WINDOW_HEIGHT: u32 = 600;
 
 pub struct Game<'a> {
     is_running: bool,
     context: Context,
     logger: Logger,
-    player: Vec2,
     world: World<'a>,
 }
 
 impl Game<'static> {
     pub fn new() -> Self {
-        let context = Context::new("My game", 800, 600);
+        let context = Context::new("My game", WINDOW_WIDTH, WINDOW_HEIGHT);
 
         Self {
             context,
             is_running: true,
             logger: Logger::new(),
-            player: Vec2::new(10.0, 20.0),
             world: World::new(),
         }
     }
@@ -73,7 +72,7 @@ impl Game<'static> {
         );
         asset_store.add_texture(
             "chopper".to_owned(),
-            "./assets/images/chopper.png".to_owned(),
+            "./assets/images/chopper-spritesheet.png".to_owned(),
         );
         asset_store.add_texture("radar".to_owned(), "./assets/images/radar.png".to_owned());
 
@@ -83,7 +82,17 @@ impl Game<'static> {
         );
 
         self.world.add_resource(asset_store);
+        self.world.add_resource(Logger::new());
+        self.world.add_resource(Camera {
+            rect: Rect::new(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT),
+        });
+
         let map = load_map("./assets/tilemaps/jungle.map");
+
+        self.world.add_resource(MapDimensions {
+            width: 25 * map.tile_size as i32 * map.tile_scale as i32,
+            height: 20 * map.tile_size as i32 * map.tile_scale as i32,
+        });
 
         map.tiles.iter().enumerate().for_each(|(i, tile)| {
             let tile_column = *tile % map.tiles_per_file_row;
@@ -153,13 +162,12 @@ impl Game<'static> {
             .with_component(
                 TransformComponentBuilder::default()
                     .position(Vec2::new(10.0, 30.0))
-                    .scale(Vec2::new(3.0, 3.0))
                     .rotation(90.0)
                     .build()
                     .unwrap(),
             )
             .with_component(RigidBodyComponent {
-                velocity: Vec2::new(0.0, 50.0),
+                velocity: Vec2::new(0.0, 0.0),
             })
             .with_component(SpriteComponent::enemy(32, 32, "chopper"))
             .with_component(
@@ -170,18 +178,23 @@ impl Game<'static> {
                     .build()
                     .unwrap(),
             )
+            .with_component(
+                KeyboardControlledComponentBuilder::default()
+                    .up_velocity(Vec2::new(0.0, -100.0))
+                    .left_velocity(Vec2::new(-100.0, 0.0))
+                    .down_velocity(Vec2::new(0.0, 100.0))
+                    .right_velocity(Vec2::new(100.0, 0.0))
+                    .build()
+                    .unwrap(),
+            )
+            .with_component(CameraFollowComponent)
             .finish_entity();
 
         self.world
             .create_entity()
-            .with_component(TransformComponent {
-                position: Vec2::new(250.0, 250.0),
-                scale: Vec2::new(1.0, 1.0),
-                rotation: 0.0,
-            })
             .with_component(
                 TransformComponentBuilder::default()
-                    .position(Vec2::new(250.0, 250.0))
+                    .position(Vec2::new(730.0, 20.0))
                     .build()
                     .unwrap(),
             )
@@ -189,7 +202,7 @@ impl Game<'static> {
             .with_component(
                 AnimationComponentBuilder::default()
                     .num_of_frames(8)
-                    .frame_rate_speed(6)
+                    .frame_rate_speed(12)
                     .start_time(self.context.instant.borrow().elapsed())
                     .build()
                     .unwrap(),
@@ -198,12 +211,17 @@ impl Game<'static> {
         self.world.add_system(MovementSystem::new(), false);
         self.world
             .add_system(RenderSystem::new(self.context.canvas.clone()), false);
-        self.world.add_system(AnimationSystem {
-            instant: self.context.instant.clone(),
-        }, false);
+        self.world.add_system(
+            AnimationSystem {
+                instant: self.context.instant.clone(),
+            },
+            false,
+        );
         self.world.add_system(CollisionSystem::new(), false);
+        self.world.add_system(CameraMovementSystem {}, false);
 
-        self.world.events().subscribe(even_handler);
+        self.world.events().subscribe(collision_event_handler);
+        self.world.events().subscribe(key_pressed_hanlder);
     }
 
     fn setup(&mut self) {
@@ -219,50 +237,24 @@ impl Game<'static> {
                     ..
                 } => self.is_running = false,
                 Event::KeyDown {
-                    keycode: Some(Keycode::Up),
-                    ..
-                } => {}
-                Event::KeyDown {
-                    keycode: Some(Keycode::Down),
-                    ..
-                } => {}
-                Event::KeyDown {
-                    keycode: Some(Keycode::Left),
-                    ..
-                } => {}
-                Event::KeyDown {
-                    keycode: Some(Keycode::Right),
-                    ..
-                } => {}
-
-                Event::KeyUp {
-                    keycode: Some(Keycode::Up),
-                    ..
-                } => {}
-                Event::KeyUp {
-                    keycode: Some(Keycode::Down),
-                    ..
-                } => {}
-                Event::KeyUp {
-                    keycode: Some(Keycode::Left),
-                    ..
-                } => {}
-                Event::KeyUp {
-                    keycode: Some(Keycode::Right),
-                    ..
-                } => {}
-                Event::KeyDown {
                     keycode: Some(Keycode::D),
                     ..
                 } => {
-                        if self.world.has_system::<DebugSystem>() {
-                            self.logger.error("Removing debug system");
-                            self.world.remove_system::<DebugSystem>();
-                        } else {
-                            self.logger.error("Adding debug system");
-                            self.world.add_system::<DebugSystem>(DebugSystem::new(self.context.canvas.clone()), true);
-                        }
+                    if self.world.has_system::<DebugSystem>() {
+                        self.logger.error("Removing debug system");
+                        self.world.remove_system::<DebugSystem>();
+                    } else {
+                        self.logger.error("Adding debug system");
+                        self.world.add_system::<DebugSystem>(
+                            DebugSystem::new(self.context.canvas.clone()),
+                            true,
+                        );
                     }
+                }
+                Event::KeyDown {
+                    keycode: Some(code),
+                    ..
+                } => self.world.emit_event(KeyPressed { key: code }),
                 _ => {}
             }
         }
@@ -278,6 +270,7 @@ impl Game<'static> {
         self.world.update();
         self.world.update_system::<MovementSystem>();
         self.world.update_system::<CollisionSystem>();
+        self.world.update_system::<CameraMovementSystem>();
     }
 
     pub fn render(&mut self, _: &Duration) {
@@ -295,8 +288,12 @@ impl Game<'static> {
     }
 }
 
+pub struct Camera {
+    pub rect: Rect,
+}
 
-fn even_handler(event: &Collision, query: &Query, cmd_buffer: &mut CommandBuffer) {
-    cmd_buffer.remove_entity(&Entity(event.a));
-    cmd_buffer.remove_entity(&Entity(event.b));
+#[derive(Clone)]
+pub struct MapDimensions {
+    pub height: i32,
+    pub width: i32
 }

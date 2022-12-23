@@ -9,11 +9,12 @@ use std::{
 };
 
 use super::{
-    command_buffer::CommandBuffer,
+    command_buffer::{self, CommandBuffer},
     components::Component,
     entities::{self, entity_manager::EntityManager, Entity},
+    events::{EventEmitter, GameEvent, WorldEventEmmiter, WorldEventSubscriber, WorldEvents},
     query::Query,
-    resources::Resources, events::{WorldEventSubscriber, WorldEvents, WorldEventEmmiter, EventEmitter},
+    resources::Resources,
 };
 use super::{System, SystemAction};
 
@@ -118,13 +119,21 @@ impl<'a> World<'a> {
 
         self.entity_manager.remove_entity(entity);
     }
-    
+
     pub fn events(&mut self) -> &mut impl WorldEventSubscriber {
         &mut self.events
     }
 
     pub fn emiter(&self) -> EventEmitter {
         self.events.emiter()
+    }
+
+    pub fn emit_event<T: GameEvent + 'static>(&mut self, event: T) {
+        let mut cmd_buffer = CommandBuffer::new();
+        let query = self.query();
+
+        self.emiter().emit(event, &mut cmd_buffer, &query);
+        self.handle_commands(cmd_buffer);
     }
 
     pub fn add_system<T: SystemAction + 'static>(&mut self, system_action: T, update: bool) {
@@ -160,23 +169,26 @@ impl<'a> World<'a> {
                 .info(&format!("Updating system {}", system.name));
 
             let command_buffer = system.active(self);
-
-            for command in command_buffer.iterate() {
-                match command {
-                    WorldCommand::RemoveEntity(id) => self.remove_entity(&Entity(*id)),
-                    WorldCommand::RemoveComponent(id, comp_id) => {
-                        self.remove_component_with_id(&Entity(*id), comp_id)
-                    }
-                    WorldCommand::AddComponent(id, comp) => todo!(),
-                    WorldCommand::CreateEntity(components) => todo!(),
-                }
-            }
+            self.handle_commands(command_buffer);
         } else {
             self.logger
                 .info(&format!("Skipping system {} update", type_name::<T>()));
         }
 
         self.systems = std::mem::take(&mut systems);
+    }
+
+    fn handle_commands(&mut self, command_buffer: CommandBuffer) {
+        for command in command_buffer.iterate() {
+            match command {
+                WorldCommand::RemoveEntity(id) => self.remove_entity(&Entity(*id)),
+                WorldCommand::RemoveComponent(id, comp_id) => {
+                    self.remove_component_with_id(&Entity(*id), comp_id)
+                }
+                WorldCommand::AddComponent(id, comp) => todo!(),
+                WorldCommand::CreateEntity(components) => todo!(),
+            }
+        }
     }
 
     pub fn has_system<T: SystemAction + 'static>(&self) -> bool {
@@ -198,14 +210,6 @@ impl<'a> World<'a> {
         self.resources.add(resource);
         self.logger
             .info(&format!("Add resource {}", type_name::<T>(),));
-    }
-
-    pub fn get_resource<T: Any>(&self) -> Option<&T> {
-        self.resources.get_ref()
-    }
-
-    pub fn get_resource_mut<T: Any>(&mut self) -> Option<&mut T> {
-        self.resources.get_ref_mut()
     }
 
     pub fn delete_resource<T: Any>(&mut self) {

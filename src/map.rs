@@ -9,7 +9,7 @@ pub struct Map {
     pub tiles_per_row: u32,
     #[builder(default = "10")]
     pub tiles_per_file_row: u32,
-    pub tiles: Vec<u32>
+    pub tiles: Vec<u32>,
 }
 
 pub fn load_map(map_file: &str) -> Map {
@@ -26,6 +26,7 @@ pub fn load_map(map_file: &str) -> Map {
     MapBuilder::default()
         .tiles_per_row(columns_count)
         .tiles(tiles)
+        .tile_scale(2.0)
         .build()
         .unwrap()
 }
