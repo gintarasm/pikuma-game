@@ -368,10 +368,10 @@ impl SystemAction for CameraMovementSystem {
         
         let transforms = query.components().get::<TransformComponent>();
         for entity in entities {
-            let transfrom = transforms.get(entity.0).unwrap();
+            let transform = transforms.get(entity.0).unwrap();
 
-            let transform_x = transfrom.position.x as i32;
-            let transform_y = transfrom.position.y as i32;
+            let transform_x = transform.position.x as i32;
+            let transform_y = transform.position.y as i32;
 
             if transform_x + (camera.rect.w / 2) < map_dimensions.width {
                 camera.rect.x = transform_x - (game::WINDOW_WIDTH / 2) as i32;

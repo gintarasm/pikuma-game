@@ -24,8 +24,8 @@ impl CommandBuffer {
         }
     }
 
-    pub fn remove_entity(&mut self, enitity: &Entity) {
-        self.commands.push_front(WorldCommand::RemoveEntity(enitity.0));
+    pub fn remove_entity(&mut self, entity: &Entity) {
+        self.commands.push_front(WorldCommand::RemoveEntity(entity.0));
     }
 
     pub fn remove_component<T: Component + 'static>(&mut self, entity: &Entity) {
