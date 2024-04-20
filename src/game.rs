@@ -11,8 +11,8 @@ use crate::components::{
     KeyboardControlledComponent, KeyboardControlledComponentBuilder, RigidBodyComponent,
     SpriteComponent, TransformComponent, TransformComponentBuilder,
 };
-use crate::ecs::events::WorldEventSubscriber;
-use crate::ecs::world::World;
+use secs::events::WorldEventSubscriber;
+use secs::world::World;
 use crate::logger::Logger;
 use crate::map::load_map;
 use crate::resources::DeltaTime;

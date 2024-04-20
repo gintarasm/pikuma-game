@@ -1,4 +1,5 @@
-use ecs_macro::Component;
+use secs::ecs_macro::Component;
+use secs::components::Component;
 use glam::Vec2;
 use sdl2::rect::Rect;
 use time::Duration;

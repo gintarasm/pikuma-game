@@ -1,4 +1,4 @@
-use ecs_macro::GameEvent;
+use secs::ecs_macro::GameEvent;
 use sdl2::keyboard::Keycode;
 
 

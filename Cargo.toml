@@ -6,13 +6,13 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-sdl2 = {version = "0.35.2", features = ["image", "unsafe_textures"]}
+secs = { git = "https://github.com/gintarasm/secs.git" }
+sdl2 = {version = "0.36.0", features = ["image", "unsafe_textures"]}
 time = {version = "0.3.14", features = ["formatting"]}
-ecs_macro = { path = "ecs_macro" }
-imgui = "0.8.2"
-derive_builder = "0.11.2"
-glam = "0.22.0"
-rlua = "0.19.4"
-image = "0.24.3"
+imgui = "0.11.0"
+derive_builder = "0.20.0"
+glam = "0.27.0"
+rlua = "0.20.0"
+image = "0.25.1"
 thiserror = "1.0.37"
 

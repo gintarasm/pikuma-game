@@ -1,7 +1,6 @@
 mod game;
 mod sdl;
 mod logger;
-mod ecs;
 mod components;
 mod systems;
 mod asset_store;

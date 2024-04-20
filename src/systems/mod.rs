@@ -10,17 +10,16 @@ use crate::asset_store::AssetStore;
 use crate::components::{
     AnimationComponent, BoxColliderComponent, CameraFollowComponent, KeyboardControlledComponent, SpriteLayer,
 };
-use crate::ecs::command_buffer::CommandBuffer;
-use crate::ecs::events::{EventEmitter, WorldEventEmmiter};
-use crate::ecs::query::Query;
+use secs::command_buffer::CommandBuffer;
+use secs::events::{EventEmitter, WorldEventEmmiter};
+use secs::query::Query;
 use crate::game::{Camera, MapDimensions, self};
 use crate::resources::DeltaTime;
 use crate::{
     components::{RigidBodyComponent, SpriteComponent, TransformComponent},
-    ecs::{entities::Entity, world::World, System, SystemAction, SystemBuilder},
     logger::Logger,
 };
-
+use secs::{entities::Entity, world::World, System, SystemAction, SystemBuilder};
 use self::events::{Collision, KeyPressed};
 
 pub mod events;
