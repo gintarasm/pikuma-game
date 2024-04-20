@@ -3,25 +3,27 @@ use sdl2::rect::Rect;
 use sdl2::render::TextureCreator;
 use sdl2::video::WindowContext;
 use sdl2::{event::Event, keyboard::Keycode, pixels::Color, EventPump};
+use secs::SystemBuilder;
 use time::Duration;
 
 use crate::asset_store::AssetStore;
 use crate::components::{
-    AnimationComponentBuilder, BoxColliderComponentBuilder, CameraFollowComponent,
-    KeyboardControlledComponent, KeyboardControlledComponentBuilder, RigidBodyComponent,
-    SpriteComponent, TransformComponent, TransformComponentBuilder,
+    AnimationComponent, AnimationComponentBuilder, BoxColliderComponent,
+    BoxColliderComponentBuilder, CameraFollowComponent, KeyboardControlledComponentBuilder, RigidBodyComponent, SpriteComponent, TransformComponent,
+    TransformComponentBuilder,
 };
-use secs::events::WorldEventSubscriber;
-use secs::world::World;
 use crate::logger::Logger;
 use crate::map::load_map;
 use crate::resources::DeltaTime;
 use crate::sdl::{Context, MILLIS_PER_FRAME};
 use crate::systems::events::KeyPressed;
 use crate::systems::{
-    collision_event_handler, key_pressed_hanlder, AnimationSystem, CollisionSystem, DebugSystem,
-    MovementSystem, RenderSystem, CameraMovementSystem,
+    collision_event_handler, key_pressed_hanlder,
+    AnimationSystem, CameraMovementSystem, CollisionSystem, DebugSystem, MovementSystem,
+    RenderSystem,
 };
+use secs::events::WorldEventSubscriber;
+use secs::world::World;
 
 pub const WINDOW_WIDTH: u32 = 800;
 pub const WINDOW_HEIGHT: u32 = 600;
@@ -208,17 +210,56 @@ impl Game<'static> {
                     .unwrap(),
             )
             .finish_entity();
-        self.world.add_system(MovementSystem::new(), false);
-        self.world
-            .add_system(RenderSystem::new(self.context.canvas.clone()), false);
-        self.world.add_system(
-            AnimationSystem {
-                instant: self.context.instant.clone(),
-            },
+
+        self.world.add_system::<MovementSystem>(
+            SystemBuilder::<MovementSystem>::new(self.world.get_component_signatures())
+                .with_system_data(MovementSystem)
+                .with_action(MovementSystem::action)
+                .with_component::<TransformComponent>()
+                .with_component::<RigidBodyComponent>()
+                .build(),
             false,
         );
-        self.world.add_system(CollisionSystem::new(), false);
-        self.world.add_system(CameraMovementSystem {}, false);
+
+        self.world.add_system::<RenderSystem>(
+            SystemBuilder::<RenderSystem>::new(self.world.get_component_signatures())
+                .with_system_data(RenderSystem::new(self.context.canvas.clone()))
+                .with_action(RenderSystem::action)
+                .with_component::<TransformComponent>()
+                .with_component::<SpriteComponent>()
+                .build(),
+            false,
+        );
+
+        self.world.add_system::<AnimationSystem>(
+            SystemBuilder::<AnimationSystem>::new(self.world.get_component_signatures())
+                .with_system_data(AnimationSystem::new(self.context.instant.clone()))
+                .with_action(AnimationSystem::action)
+                .with_component::<SpriteComponent>()
+                .with_component::<AnimationComponent>()
+                .build(),
+            false,
+        );
+
+        self.world.add_system::<CollisionSystem>(
+            SystemBuilder::<CollisionSystem>::new(self.world.get_component_signatures())
+                .with_system_data(CollisionSystem)
+                .with_action(CollisionSystem::action)
+                .with_component::<TransformComponent>()
+                .with_component::<BoxColliderComponent>()
+                .build(),
+            false,
+        );
+
+        self.world.add_system::<CameraMovementSystem>(
+            SystemBuilder::<CameraMovementSystem>::new(self.world.get_component_signatures())
+                .with_system_data(CameraMovementSystem)
+                .with_action(CameraMovementSystem::action)
+                .with_component::<CameraFollowComponent>()
+                .with_component::<TransformComponent>()
+                .build(),
+            false,
+        );
 
         self.world.events().subscribe(collision_event_handler);
         self.world.events().subscribe(key_pressed_hanlder);
@@ -246,8 +287,15 @@ impl Game<'static> {
                     } else {
                         self.logger.error("Adding debug system");
                         self.world.add_system::<DebugSystem>(
-                            DebugSystem::new(self.context.canvas.clone()),
-                            true,
+                            SystemBuilder::<DebugSystem>::new(
+                                self.world.get_component_signatures(),
+                            )
+                            .with_system_data(DebugSystem::new(self.context.canvas.clone()))
+                            .with_action(DebugSystem::action)
+                            .with_component::<TransformComponent>()
+                            .with_component::<BoxColliderComponent>()
+                            .build(),
+                            false,
                         );
                     }
                 }
@@ -295,5 +343,5 @@ pub struct Camera {
 #[derive(Clone)]
 pub struct MapDimensions {
     pub height: i32,
-    pub width: i32
+    pub width: i32,
 }

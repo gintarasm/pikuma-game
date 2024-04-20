@@ -6,43 +6,44 @@ use sdl2::rect::Rect;
 use sdl2::render::WindowCanvas;
 use time::Instant;
 
+use self::events::{Collision, KeyPressed};
 use crate::asset_store::AssetStore;
 use crate::components::{
-    AnimationComponent, BoxColliderComponent, CameraFollowComponent, KeyboardControlledComponent, SpriteLayer,
+    AnimationComponent, BoxColliderComponent, KeyboardControlledComponent,
+    SpriteLayer,
 };
-use secs::command_buffer::CommandBuffer;
-use secs::events::{EventEmitter, WorldEventEmmiter};
-use secs::query::Query;
-use crate::game::{Camera, MapDimensions, self};
+use crate::game::{self, Camera, MapDimensions};
 use crate::resources::DeltaTime;
 use crate::{
     components::{RigidBodyComponent, SpriteComponent, TransformComponent},
     logger::Logger,
 };
-use secs::{entities::Entity, world::World, System, SystemAction, SystemBuilder};
-use self::events::{Collision, KeyPressed};
+use secs::command_buffer::CommandBuffer;
+use secs::events::{EventEmitter, WorldEventEmmiter};
+use secs::query::Query;
+use secs::entities::Entity;
 
 pub mod events;
 
-pub struct MovementSystem {}
+#[derive(Clone, Copy)]
+pub struct MovementSystem;
 
 impl MovementSystem {
-    pub fn new() -> Self {
-        Self {}
-    }
-}
-
-impl SystemAction for MovementSystem {
-    fn action(
-        &mut self,
+    pub fn action(
+    _: &mut MovementSystem,
         query: Query,
-        entities: &Vec<Entity>,
+        entities: &[Entity],
         _: &mut CommandBuffer,
         _: EventEmitter,
     ) {
         let mut transforms = query.components().get_mut::<TransformComponent>();
         let rigid_bodies = query.components().get::<RigidBodyComponent>();
-        let delta_time = query.resources.get::<DeltaTime>().borrow().get::<DeltaTime>().0;
+        let delta_time = query
+            .resources
+            .get::<DeltaTime>()
+            .borrow()
+            .get::<DeltaTime>()
+            .0;
 
         let mut logger_r = query.resources.get::<Logger>().borrow_mut();
         let mut logger = logger_r.get_mut::<Logger>();
@@ -64,42 +65,28 @@ impl SystemAction for MovementSystem {
             ));
         }
     }
-
-    fn to_system(self, world: &World) -> System {
-        SystemBuilder::new("MovementSystem", self, world.get_component_signatures())
-            .with_component::<TransformComponent>()
-            .with_component::<RigidBodyComponent>()
-            .build()
-    }
 }
-
 pub struct RenderSystem {
     context: Rc<RefCell<WindowCanvas>>,
 }
 
 impl RenderSystem {
-    pub fn new(context: Rc<RefCell<WindowCanvas>>) -> Self {
-        Self { context }
-    }
-}
-
-impl SystemAction for RenderSystem {
-    fn action(
-        &mut self,
+    pub fn action(
+        data: &mut RenderSystem,
         query: Query,
-        entities: &Vec<Entity>,
+        entities: &[Entity],
         _: &mut CommandBuffer,
         _: EventEmitter,
     ) {
         let asset_store_r = query.resources.get::<AssetStore>().borrow();
         let asset_store = asset_store_r.get::<AssetStore>();
-        
+
         let camera_r = query.resources.get::<Camera>().borrow();
         let camera = camera_r.get::<Camera>();
 
         let transforms = query.components().get::<TransformComponent>();
         let sprites = query.components().get::<SpriteComponent>();
-        let mut canvas = self.context.borrow_mut();
+        let mut canvas = data.context.borrow_mut();
 
         let (mut ui, mut other): (Vec<_>, Vec<_>) = entities
             .iter()
@@ -162,12 +149,10 @@ impl SystemAction for RenderSystem {
                 .unwrap();
         }
     }
-
-    fn to_system(self, world: &World) -> System {
-        SystemBuilder::new("RenderSystem", self, world.get_component_signatures())
-            .with_component::<TransformComponent>()
-            .with_component::<SpriteComponent>()
-            .build()
+}
+impl RenderSystem {
+    pub fn new(context: Rc<RefCell<WindowCanvas>>) -> Self {
+        Self { context }
     }
 }
 
@@ -175,11 +160,16 @@ pub struct AnimationSystem {
     pub instant: Rc<RefCell<Instant>>,
 }
 
-impl SystemAction for AnimationSystem {
-    fn action(
-        &mut self,
+impl AnimationSystem {
+    pub fn new(instant: Rc<RefCell<Instant>>) -> Self {
+        Self {
+            instant
+        }
+    }
+    pub fn action(
+        data: &mut AnimationSystem,
         query: Query,
-        entities: &Vec<Entity>,
+        entities: &[Entity],
         _: &mut CommandBuffer,
         _: EventEmitter,
     ) {
@@ -190,7 +180,7 @@ impl SystemAction for AnimationSystem {
             let sprite = sprites.get_mut(entity.0).unwrap();
             let animation = animations.get_mut(entity.0).unwrap();
 
-            let current_frame_ms = ((self.instant.borrow().elapsed().whole_milliseconds()
+            let current_frame_ms = ((data.instant.borrow().elapsed().whole_milliseconds()
                 - animation.start_time.whole_milliseconds())
                 * animation.frame_rate_speed as i128
                 / 1000)
@@ -202,28 +192,15 @@ impl SystemAction for AnimationSystem {
                 .set_x((animation.current_frame * sprite.width) as i32);
         }
     }
-
-    fn to_system(self, world: &World) -> System {
-        SystemBuilder::new("AnimationSystem", self, world.get_component_signatures())
-            .with_component::<SpriteComponent>()
-            .with_component::<AnimationComponent>()
-            .build()
-    }
 }
 
-pub struct CollisionSystem {}
+pub struct CollisionSystem;
 
 impl CollisionSystem {
-    pub fn new() -> Self {
-        Self {}
-    }
-}
-
-impl SystemAction for CollisionSystem {
-    fn action(
-        &mut self,
+    pub fn action(
+        data: &mut  CollisionSystem,
         query: Query,
-        entities: &Vec<Entity>,
+        entities: &[Entity],
         command_buffer: &mut CommandBuffer,
         emitter: EventEmitter,
     ) {
@@ -273,13 +250,6 @@ impl SystemAction for CollisionSystem {
             }
         }
     }
-
-    fn to_system(self, world: &World) -> System {
-        SystemBuilder::new("ColissionSystem", self, world.get_component_signatures())
-            .with_component::<BoxColliderComponent>()
-            .with_component::<TransformComponent>()
-            .build()
-    }
 }
 
 fn check_AABB_collision(
@@ -305,22 +275,20 @@ impl DebugSystem {
     }
 }
 
-impl SystemAction for DebugSystem {
-    fn action(
-        &mut self,
+impl DebugSystem {
+    pub fn action(
+        data: &mut DebugSystem,
         query: Query,
-        entities: &Vec<Entity>,
+        entities: &[Entity],
         _: &mut CommandBuffer,
         _: EventEmitter,
     ) {
-
-
         let camera_r = query.resources.get::<Camera>().borrow();
         let camera = camera_r.get::<Camera>();
 
         let transforms = query.components().get::<TransformComponent>();
         let colliders = query.components().get::<BoxColliderComponent>();
-        let mut canvas = self.context.borrow_mut();
+        let mut canvas = data.context.borrow_mut();
 
         for entity in entities {
             let transform = transforms.get(entity.0).unwrap();
@@ -339,32 +307,24 @@ impl SystemAction for DebugSystem {
             canvas.draw_rect(collider_rect).unwrap();
         }
     }
-
-    fn to_system(self, world: &World) -> System {
-        SystemBuilder::new("DebugSystem", self, world.get_component_signatures())
-            .with_component::<TransformComponent>()
-            .with_component::<BoxColliderComponent>()
-            .build()
-    }
 }
 
 pub struct CameraMovementSystem;
 
-impl SystemAction for CameraMovementSystem {
-    fn action(
-        &mut self,
+impl CameraMovementSystem {
+    pub fn action(
+        data: &mut CameraMovementSystem,
         query: Query,
-        entities: &Vec<Entity>,
+        entities: &[Entity],
         _: &mut CommandBuffer,
         _: EventEmitter,
     ) {
-
         let map_dimensions_r = query.resources.get::<MapDimensions>().borrow();
         let map_dimensions = map_dimensions_r.get::<MapDimensions>();
 
         let mut camera_r = query.resources.get::<Camera>().borrow_mut();
         let mut camera = camera_r.get_mut::<Camera>();
-        
+
         let transforms = query.components().get::<TransformComponent>();
         for entity in entities {
             let transform = transforms.get(entity.0).unwrap();
@@ -381,21 +341,18 @@ impl SystemAction for CameraMovementSystem {
             }
 
             camera.rect.x = if camera.rect.x < 0 { 0 } else { camera.rect.x };
-            camera.rect.x = if camera.rect.x > camera.rect.w { camera.rect.w } else { camera.rect.x };
+            camera.rect.x = if camera.rect.x > camera.rect.w {
+                camera.rect.w
+            } else {
+                camera.rect.x
+            };
             camera.rect.y = if camera.rect.y < 0 { 0 } else { camera.rect.y };
-            camera.rect.y = if camera.rect.y > camera.rect.h { camera.rect.h } else { camera.rect.y };
+            camera.rect.y = if camera.rect.y > camera.rect.h {
+                camera.rect.h
+            } else {
+                camera.rect.y
+            };
         }
-    }
-
-    fn to_system(self, world: &World) -> System {
-        SystemBuilder::new(
-            "CameraMovementSystem",
-            self,
-            world.get_component_signatures(),
-        )
-        .with_component::<CameraFollowComponent>()
-        .with_component::<TransformComponent>()
-        .build()
     }
 }
 
